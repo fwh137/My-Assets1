@@ -52,7 +52,7 @@
 
         button.btn-primary { width: 100%; padding: 16px; border: none; border-radius: 14px; font-weight: 700; cursor: pointer; background: var(--primary); color: white; font-size: 1rem; margin-top: 10px; }
         
-        .check-row { display: flex; align-items: center; gap: 10px; margin: 15px 0; font-size: 0.9rem; color: var(--subtext); }
+        .check-row { display: flex; align-items: center; gap: 10px; margin: 5px 0; font-size: 0.9rem; color: var(--subtext); }
         .check-row input[type="checkbox"] { width: 22px !important; height: 22px !important; margin: 0 !important; }
         
         .qty-badge { background: #3a3a3c; padding: 4px 10px; border-radius: 8px; font-size: 0.85rem; color: var(--primary); display: inline-block; margin-top: 5px; }
@@ -62,6 +62,65 @@
         .legend-card { background: #2c2c2e; border-radius: 20px; padding: 15px; margin-top: 15px; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
         .legend-item { display: flex; align-items: center; justify-content: space-between; font-size: 0.8rem; }
         .color-dot { width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; }
+
+/* --- 🔴 強制修正：讓 Checkbox 變身 iOS 滑塊 --- */
+.check-row {
+    display: flex !important;
+    align-items: center !important;
+    gap: 12px !important;
+    padding: 15px 0 !important;
+    cursor: pointer !important;
+}
+
+/* 1. 軌道：強制覆蓋掉原本 input 的 100% 寬度與 54px 高度 */
+.check-row input[type="checkbox"] {
+    appearance: none !important;
+    -webkit-appearance: none !important;
+    position: relative !important;
+    width: 48px !important;      /* 固定滑塊寬度 */
+    height: 26px !important;     /* 固定滑塊高度 */
+    background: #3a3a3c !important; /* 預設灰色背景 */
+    border-radius: 20px !important;
+    border: none !important;
+    margin: 0 !important;        /* 移除原本的外距 */
+    padding: 0 !important;
+    cursor: pointer !important;
+    transition: background 0.3s !important;
+    background-image: none !important; /* 移除原本的下拉箭頭圖案 */
+    flex-shrink: 0;
+}
+
+/* 2. 白色圓點：利用偽元素畫出來 */
+.check-row input[type="checkbox"]::after {
+    content: "" !important;
+    position: absolute !important;
+    top: 2px !important;
+    left: 2px !important;
+    width: 22px !important;
+    height: 22px !important;
+    background: white !important;
+    border-radius: 50% !important;
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.3) !important;
+    display: block !important;
+}
+
+/* 3. 開啟狀態：背景變亮灰色 */
+.check-row input[type="checkbox"]:checked {
+    background: #8e8e93 !important; 
+}
+
+/* 4. 開啟狀態：圓點右移 */
+.check-row input[type="checkbox"]:checked::after {
+    transform: translateX(22px) !important;
+}
+
+/* 修正文字大小與顏色 */
+.check-row {
+    color: var(--subtext);
+    font-size: 0.95rem;
+}
+
     </style>
 </head>
 <body>
@@ -95,13 +154,13 @@
 
         <label class="check-row">
             <input type="checkbox" id="enableRepay" onchange="document.getElementById('debtFields').style.display = this.checked ? 'block' : 'none'"> 
-            設定每月自動還款 (僅限貸款)
+            每月固定支出/還款 (自動扣款)
         </label>
-        
-        <div id="debtFields" style="display:none; padding: 10px; background: rgba(255,255,255,0.05); border-radius: 14px; margin-bottom: 10px;">
-            <input type="number" id="repayDay" placeholder="還款日(1-31)">
-            <input type="number" id="repayAmount" placeholder="還款金額">
-        </div>
+
+<div id="debtFields" style="display:none; padding: 10px; background: rgba(255,255,255,0.05); border-radius: 14px; margin-top: 5px; margin-bottom: 5px;">
+    <input type="number" id="repayDay" placeholder="還款日(1-31)">
+    <input type="number" id="repayAmount" placeholder="還款金額">
+</div>
         
         <button class="btn-primary" onclick="handleNewItem()">確認加入並同步</button>
     </div>
@@ -111,7 +170,7 @@
     // 你的 Google Apps Script URL
     const YOUR_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbymGrkXe24-JaWEvT6lYMQBaBsyYTy5_lAiDfIxAORQ_yYqoCfYxgRLgXCjR0BETyqC/exec";
     
-    let categories = JSON.parse(localStorage.getItem('percento_cat_order')) || ["台幣活存", "台幣現金流", "台股", "存股", "美股", "美元活存", "投資", "貸款", "其他"];
+    let categories = JSON.parse(localStorage.getItem('percento_cat_order')) || ["台幣活存", "台幣現金", "台股", "存股", "美股", "美元活存", "投資", "貸款", "其他"];
     let assets = JSON.parse(localStorage.getItem('percento_dark_data')) || [];
     const COLORS = ['#0a84ff','#64d2ff','#ff9f0a','#30d158','#bf5af2','#5e5ce6','#64d2ff','#ff453a','#5856d6'];
     let usdToTwd = 32.5, chart, currentTotal = 0, isSorting = false;
@@ -393,6 +452,14 @@ window.onload = async () => {
     document.getElementById('status').innerText = "✅ 同步完成";
     refresh();
 };
+
+// 在 handleNewItem 函數末端加入
+document.getElementById('code').value = ''; 
+document.getElementById('qty').value = '';
+document.getElementById('repayDay').value = '';
+document.getElementById('repayAmount').value = '';
+document.getElementById('enableRepay').checked = false; // 重設滑塊開關
+document.getElementById('debtFields').style.display = 'none'; // 隱藏欄位
     
     // 手機版載入補強機制
     setTimeout(initCategorySelect, 500);

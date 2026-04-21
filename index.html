@@ -277,24 +277,27 @@ async function saveAndRefresh() {
                     </div>
                     <div class="category-content">
 ${g.items.map(item => `
-    <div class="detail-item">
-        <div>
-            <b onclick="const n=prompt('改名', '${item.symbol}'); if(n){assets[${item.i}].symbol=n; saveAndRefresh();}">${item.symbol}</b><br>
-            <div class="qty-badge">${item.displayQty.toLocaleString()} ${item.category.includes('股')?'股':(item.currency==='USD'?'美元':'台幣')}</div>
-            
-            ${item.type === 'auto' ? `
-                <div class="price-tag" style="${item.currency === 'USD' ? 'background:rgba(10, 132, 255, 0.1); color:var(--primary)' : ''}">
-                    ${item.currency} ${item.price.toFixed(2)}
-                </div>
-            ` : ''}
+<div class="detail-item">
+    <div>
+        <b onclick="const n=prompt('修改名稱', '${item.symbol}'); if(n){assets[${item.i}].symbol=n; saveAndRefresh();}">${item.symbol}</b><br>
+        
+        <div class="qty-badge" style="cursor:pointer" onclick="const q=prompt('修改數量/金額', '${item.qty}'); if(q!==null){assets[${item.i}].qty=Number(q); saveAndRefresh();}">
+            ${item.displayQty.toLocaleString()} ${item.category.includes('股')?'股':(item.currency==='USD'?'美元':'台幣')} ✎
+        </div>
+        
+        ${item.type === 'auto' ? `
+            <div class="price-tag" style="${item.currency === 'USD' ? 'background:rgba(10, 132, 255, 0.1); color:var(--primary)' : ''}">
+                ${item.currency} ${item.price.toFixed(2)}
+            </div>
+        ` : ''}
 
-            ${item.isRepaid ? `<br><span class="price-tag" style="background:rgba(50,215,75,0.1); color:var(--success)">本月已還款</span>` : ''}
-        </div>
-        <div style="text-align:right">
-            <div style="font-weight:700; color:${item.val < 0 ? 'var(--negative)' : 'white'}">$${Math.round(item.val).toLocaleString()}</div>
-            <span class="remove-link" onclick="if(confirm('確定移除？')){assets.splice(${item.i},1); saveAndRefresh();}">移除</span>
-        </div>
+        ${item.isRepaid ? `<br><span class="price-tag" style="background:rgba(50,215,75,0.1); color:var(--success)">本月已還款</span>` : ''}
     </div>
+    <div style="text-align:right">
+        <div style="font-weight:700; color:${item.val < 0 ? 'var(--negative)' : 'white'}">$${Math.round(item.val).toLocaleString()}</div>
+        <span class="remove-link" onclick="if(confirm('確定移除？')){assets.splice(${item.i},1); saveAndRefresh();}">移除</span>
+    </div>
+</div>
 `).join('')}
                     </div>
                 </div>`;

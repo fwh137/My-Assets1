@@ -317,11 +317,50 @@ ${g.items.map(item => `
                 legend.innerHTML += `<div class="legend-item"><div style="display:flex; align-items:center"><div class="color-dot" style="background:${color}"></div>${cat}</div><div>${absTotal?((val/absTotal)*100).toFixed(1):0}%</div></div>`;
             }
         });
-        chart = new Chart(ctx, {
-            type: 'doughnut',
-            data: { datasets: [{ data, backgroundColor: bg, borderWidth: 0 }]},
-            options: { cutout: '80%', plugins: { legend: { display: false } }, maintainAspectRatio: false }
-        });
+type: 'doughnut',
+    data: { 
+        labels: labels, // 補回標籤，Tooltip 才能顯示名稱
+        datasets: [{ 
+            data, 
+            backgroundColor: bg, 
+            borderWidth: 2, // 稍微增加邊框感
+            borderColor: 'var(--card)', // 邊框顏色與背景一致
+            hoverOffset: 15 // 關鍵：滑鼠靠近時彈出的距離
+        }]
+    },
+    options: { 
+        cutout: '75%', // 稍微調細一點點，放大效果更明顯
+        plugins: { 
+            legend: { display: false }, // 依然隱藏上方預設圖例，使用我們自製的
+            tooltip: {
+                enabled: true, // 開啟提示框
+                backgroundColor: 'rgba(28, 28, 30, 0.9)', // 深色背景
+                titleFont: { size: 14 },
+                bodyFont: { size: 14 },
+                padding: 12,
+                cornerRadius: 10,
+                displayColors: true, // 顯示顏色小點
+                callbacks: {
+                    label: function(context) {
+                        let label = context.label || '';
+                        let value = context.parsed || 0;
+                        let percent = ((value / absTotal) * 100).toFixed(1);
+                        return ` ${label}: $${Math.round(value).toLocaleString()} (${percent}%)`;
+                    }
+                }
+            }
+        }, 
+        maintainAspectRatio: false,
+        layout: {
+            padding: 10 // 給予一點緩衝空間讓它彈出時不會被切到
+        },
+        // 點擊或滑鼠靠近時的動畫
+        animation: {
+            animateRotate: true,
+            animateScale: true
+        }
+    }
+});
     }
 
     // 啟動初始化

@@ -317,6 +317,7 @@ ${g.items.map(item => `
                 legend.innerHTML += `<div class="legend-item"><div style="display:flex; align-items:center"><div class="color-dot" style="background:${color}"></div>${cat}</div><div>${absTotal?((val/absTotal)*100).toFixed(1):0}%</div></div>`;
             }
         });
+        chart = new Chart(ctx, {
 type: 'doughnut',
     data: { 
         labels: labels, // 補回標籤，Tooltip 才能顯示名稱

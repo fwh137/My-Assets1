@@ -21,7 +21,27 @@
         #canvas-holder { width: 100%; max-width: 260px; height: 260px; margin: 0 auto; position: relative; }
         
         .sync-btn { background: var(--accent); color: var(--primary); border: 1px solid var(--primary); padding: 14px; border-radius: 14px; font-size: 0.95rem; cursor: pointer; margin-top: 15px; font-weight: 600; width: 100%; }
-        .sort-btn { position: absolute; top: 15px; right: 15px; background: rgba(255,255,255,0.1); color: var(--text); border: none; padding: 6px 12px; border-radius: 10px; font-size: 0.75rem; font-weight: 600; }
+.sort-btn {
+    position: absolute;
+    top: 15px;
+    right: 15px;
+    background: rgba(255, 255, 255, 0.1); /* 半透明玻璃質感 */
+    color: var(--text);
+    border: 1px solid rgba(255, 255, 255, 0.2); /* 纖細的邊框 */
+    padding: 6px 14px;
+    border-radius: 10px;
+    font-size: 0.8rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    backdrop-filter: blur(5px); /* 毛玻璃效果，讓按鈕更有質感 */
+}
+
+/* 點擊時的視覺回饋 */
+.sort-btn:active {
+    transform: scale(0.95);
+    background: rgba(255, 255, 255, 0.2);
+}
 
         /* 分類清單優化 */
         .category-group { background: var(--card); border-radius: 20px; margin-bottom: 12px; border: 1px solid #333; overflow: hidden; }
@@ -132,7 +152,7 @@
         <button class="sort-btn" onclick="toggleSortMode()">⇅ 排序</button>
         <div id="canvas-holder"><canvas id="assetChart"></canvas></div>
         <div id="todayDisplay" style="color: var(--subtext); font-size: 0.75rem; margin-top:10px;"></div>
-        <button class="sync-btn" id="syncBtn" onclick="syncAllPrices()">🔄 刷新既有項目股價</button>
+        <button class="sync-btn" id="syncBtn" onclick="syncAllPrices()">🔄 更新現有項目股價</button>
         <div class="legend-card" id="chartLegend"></div>
     </div>
 
@@ -170,7 +190,19 @@
     // 你的 Google Apps Script URL
     const YOUR_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbymGrkXe24-JaWEvT6lYMQBaBsyYTy5_lAiDfIxAORQ_yYqoCfYxgRLgXCjR0BETyqC/exec";
     
-    let categories = JSON.parse(localStorage.getItem('percento_cat_order')) || ["台幣活存", "台幣現金", "台股", "存股", "美股", "美元活存", "投資", "貸款", "其他"];
+// 1. 先讀取舊有的排序
+let savedCats = JSON.parse(localStorage.getItem('percento_cat_order')) || [];
+
+// 2. 定義「一定要有」的標準分類
+const defaultCats = ["台幣活存", "台幣現金", "台股", "存股", "美股", "美元活存", "投資", "貸款", "其他"];
+
+// 3. 合併：保留舊排序，並補上清單中「缺少的」預設分類
+let categories = [...savedCats];
+defaultCats.forEach(cat => {
+    if (!categories.includes(cat)) {
+        categories.push(cat); // 如果舊資料沒這個分類，就補在最後面
+    }
+});
     let assets = JSON.parse(localStorage.getItem('percento_dark_data')) || [];
     const COLORS = ['#0a84ff','#64d2ff','#ff9f0a','#30d158','#bf5af2','#5e5ce6','#64d2ff','#ff453a','#5856d6'];
     let usdToTwd = 32.5, chart, currentTotal = 0, isSorting = false;
@@ -219,45 +251,91 @@
         } catch(e) {}
         for (let i = 0; i < assets.length; i++) {
             if (assets[i].type === 'auto') {
-                const p = await getPrice(assets[i].symbol);
-                if (p) assets[i].price = p;
-            }
-        }
+// 優先使用 originalSymbol，如果沒有(舊資料)則用 symbol
+        const queryTarget = assets[i].originalSymbol || assets[i].symbol;
+        const latestPrice = await getPrice(queryTarget);
+        if (latestPrice) assets[i].price = latestPrice;
+    }
+}
         saveAndRefresh();
-        btn.disabled = false; btn.innerText = "🔄 刷新既有項目股價";
+        btn.disabled = false; btn.innerText = "🔄 更新現有項目股價";
     }
 
-    async function handleNewItem() {
-        const code = document.getElementById('code').value.trim();
-        const qty = Number(document.getElementById('qty').value);
-        const cat = document.getElementById('categorySelect').value;
-        const type = document.getElementById('itemType').value;
-        const isRepay = document.getElementById('enableRepay').checked;
+async function handleNewItem() {
+    const code = document.getElementById('code').value.trim();
+    const qty = Number(document.getElementById('qty').value);
+    const cat = document.getElementById('categorySelect').value;
+    const type = document.getElementById('itemType').value;
+    const isRepay = document.getElementById('enableRepay').checked;
 
-        if (!code || isNaN(qty) || !cat) { alert("請完整填寫項目、數額與分類"); return; }
-
-        let symbol = code.toUpperCase().replace(".TW", "");
-        let price = 1, currency = (cat === "美元活存" || cat === "美股") ? "USD" : "TWD";
-
-        if (type === "auto") {
-            document.getElementById('status').innerText = `🔍 同步 ${symbol}...`;
-            const p = await getPrice(symbol);
-            if (p) price = p;
-            else price = Number(prompt("無法自動抓取價格，請手動輸入：", 0)) || 0;
-        }
-
-        const item = { symbol, qty, price, currency, type, category: cat };
-        if (isRepay) {
-            item.repayDay = Number(document.getElementById('repayDay').value);
-            item.repayAmount = Number(document.getElementById('repayAmount').value);
-        }
-        
-        assets.push(item);
-        saveAndRefresh();
-        document.getElementById('code').value = ''; document.getElementById('qty').value = '';
+    if (!code || isNaN(qty) || !cat) { 
+        alert("請完整填寫項目、數額與分類"); 
+        return; 
     }
 
-    function toggleSortMode() { isSorting = !isSorting; refresh(); }
+    // 建立一個不變的「原始代碼」用於之後同步價格
+    let originalSymbol = code.toUpperCase().replace(".TW", "").trim();
+    let displaySymbol = code; 
+    let price = 1;
+    let currency = (cat === "美元活存" || cat === "美股") ? "USD" : "TWD";
+
+    if (type === "auto") {
+        document.getElementById('status').innerText = `🔍 正在同步 ${originalSymbol} 報價...`;
+        const fetchedPrice = await getPrice(originalSymbol);
+        if (fetchedPrice) { 
+            price = fetchedPrice; 
+            document.getElementById('status').innerText = `✅ 已成功加入 ${originalSymbol}`;
+        } else { 
+            price = Number(prompt(`抓不到價格，請手動輸入目前價格：`, 0)) || 0; 
+            document.getElementById('status').innerText = `⚠️ 手動輸入 ${originalSymbol} 價格`;
+        }
+    }
+    
+    // 建立物件
+    const item = { 
+        symbol: displaySymbol, 
+        originalSymbol: originalSymbol, 
+        qty: qty, 
+        price: price, 
+        currency: currency, 
+        type: type, 
+        category: cat 
+    };
+
+    // 處理還款邏輯
+    if (isRepay) {
+        item.repayDay = Number(document.getElementById('repayDay').value) || 0;
+        item.repayAmount = Number(document.getElementById('repayAmount').value) || 0;
+    }
+    
+    assets.push(item);
+    saveAndRefresh();
+
+    // 清空輸入欄位
+    document.getElementById('code').value = ''; 
+    document.getElementById('qty').value = '';
+    document.getElementById('repayDay').value = '';
+    document.getElementById('repayAmount').value = '';
+    document.getElementById('enableRepay').checked = false;
+    document.getElementById('debtFields').style.display = 'none';
+}
+
+function toggleSortMode() {
+    isSorting = !isSorting;
+    const btn = document.querySelector('.sort-btn');
+    
+    if (isSorting) {
+        btn.innerText = "✅ 完成";
+        btn.style.background = "#3a3a3c"; // 變完成提醒用戶正在編輯
+        btn.style.borderColor = "transparent";
+    } else {
+        btn.innerText = "⇅ 排序";
+        btn.style.background = "rgba(255, 255, 255, 0.1)"; // 恢復半透明
+        btn.style.borderColor = "rgba(255, 255, 255, 0.2)";
+    }
+    
+    refresh();
+}
     function moveCat(idx, dir) {
         const target = idx + dir;
         if (target < 0 || target >= categories.length) return;
@@ -292,16 +370,25 @@ async function saveAndRefresh() {
     }
 }
 
-    function refresh() {
+function refresh() {
         const container = document.getElementById('categoryList');
         container.innerHTML = '';
         currentTotal = 0;
-        const curDay = new Date().getDate();
-        document.getElementById('todayDisplay').innerText = `今天是 ${new Date().getMonth()+1} 月 ${curDay} 日`;
+        
+        // --- 時間顯示邏輯 ---
+        const now = new Date();
+        const curDay = now.getDate(); // 統一從 now 取得日期
+        const timeString = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}:${now.getSeconds().toString().padStart(2, '0')}`;
+        
+        const display = document.getElementById('todayDisplay');
+        if (display) {
+            display.innerText = `更新時間 ${now.getMonth() + 1} 月 ${curDay} 日 ${timeString}`;
+        }
+        // ------------------
 
         const groups = {};
         categories.forEach(c => groups[c] = { sum: 0, items: [] });
-
+        
         assets.forEach((a, i) => {
             let finalQty = a.qty;
             let isRepaid = false;
@@ -344,11 +431,7 @@ ${g.items.map(item => `
             ${item.displayQty.toLocaleString()} ${item.category.includes('股')?'股':(item.currency==='USD'?'美元':'台幣')} ✎
         </div>
         
-        ${item.type === 'auto' ? `
-            <div class="price-tag" style="${item.currency === 'USD' ? 'background:rgba(10, 132, 255, 0.1); color:var(--primary)' : ''}">
-                ${item.currency} ${item.price.toFixed(2)}
-            </div>
-        ` : ''}
+${item.type === 'auto' ? `<div class="price-tag">TWD ${item.price.toFixed(2)} ${item.originalSymbol && item.originalSymbol !== item.symbol ? `(${item.originalSymbol})` : ''}</div>` : ''}
 
         ${item.isRepaid ? `<br><span class="price-tag" style="background:rgba(50,215,75,0.1); color:var(--success)">本月已還款</span>` : ''}
     </div>

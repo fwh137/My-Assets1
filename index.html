@@ -431,8 +431,12 @@ ${g.items.map(item => `
             ${item.displayQty.toLocaleString()} ${item.category.includes('股')?'股':(item.currency==='USD'?'美元':'台幣')} ✎
         </div>
         
-${item.type === 'auto' ? `<div class="price-tag">TWD ${item.price.toFixed(2)} ${item.originalSymbol && item.originalSymbol !== item.symbol ? `(${item.originalSymbol})` : ''}</div>` : ''}
-
+${item.type === 'auto' ? `
+    <div class="price-tag">
+        ${item.currency === 'USD' ? 'USD' : 'TWD'} ${item.price.toFixed(2)} 
+        ${item.originalSymbol && item.originalSymbol !== item.symbol ? `(${item.originalSymbol})` : ''}
+    </div>` 
+: ''}
         ${item.isRepaid ? `<br><span class="price-tag" style="background:rgba(50,215,75,0.1); color:var(--success)">本月已還款</span>` : ''}
     </div>
     <div style="text-align:right">

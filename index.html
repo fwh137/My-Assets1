@@ -239,7 +239,7 @@ defaultCats.forEach(cat => {
 });
 
 let assets = JSON.parse(localStorage.getItem('percento_dark_data')) || [];
-let isHidden = localStorage.getItem('percento_hidden') === 'true';
+let isHidden = true;
 
     const COLORS = ['#0a84ff','#64d2ff','#ff9f0a','#30d158','#bf5af2','#5e5ce6','#64d2ff','#ff453a','#5856d6'];
     let usdToTwd = 32.5, chart, currentTotal = 0, isSorting = false;
@@ -575,7 +575,7 @@ responsive: true,
 
     // 啟動初始化
 window.onload = async () => {
-    isHidden = localStorage.getItem('percento_hidden') === 'true';
+    isHidden = true;
     const btn = document.getElementById('hideBtn');
     if(btn) {
         btn.innerHTML = isHidden ? 

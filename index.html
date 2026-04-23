@@ -28,6 +28,9 @@
     background: rgba(255, 255, 255, 0.1); /* 半透明玻璃質感 */
     color: var(--text);
     border: 1px solid rgba(255, 255, 255, 0.2); /* 纖細的邊框 */
+    display: flex;          /* 🔴 新增：開啟彈性佈局 */
+    align-items: center;    /* 🔴 新增：垂直置中 */
+    justify-content: center;/* 🔴 新增：水平置中 */
     padding: 6px 14px;
     border-radius: 10px;
     font-size: 0.8rem;
@@ -43,6 +46,26 @@
     background: rgba(255, 255, 255, 0.2);
 }
 
+.eye-btn {
+    position: absolute;
+    top: 15px;
+    background: rgba(255, 255, 255, 0.1);
+    color: var(--text);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 10px;
+    cursor: pointer;
+    backdrop-filter: blur(5px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    /* 這裡設定你要的固定大小 */
+    width: 60px; 
+    height: 32px;
+    transition: all 0.2s ease;
+}
+
+.eye-btn:active { transform: scale(0.95); }
+
         /* 分類清單優化 */
         .category-group { background: var(--card); border-radius: 20px; margin-bottom: 12px; border: 1px solid #333; overflow: hidden; }
         .category-header { padding: 18px; display: flex; justify-content: space-between; align-items: center; cursor: pointer; }
@@ -54,9 +77,9 @@
         .input-area { background: var(--card); padding: 25px; border-radius: 28px; margin-top: 20px; border: 1px solid #333; }
         .input-area h3 { margin-top: 0; font-size: 1.2rem; margin-bottom: 15px; }
 
-        input, select { 
-            width: 100% !important; 
-            height: 54px !important; /* 強制高度確保手機可見 */
+input:not([type="checkbox"]), select { 
+    width: 100% !important; 
+    height: 54px !important; /* 強制高度確保手機可見 */
             padding: 0 15px !important; 
             margin: 10px 0 !important; 
             border: 1px solid #38383a !important; 
@@ -158,7 +181,9 @@
     <div id="status" style="font-size:0.75rem; text-align:center; color:var(--subtext); margin-bottom:10px;">準備就緒</div>
     
     <div class="chart-box">
-        <button class="sort-btn" onclick="toggleSortMode()">⇅ 排序</button>
+        <button class="eye-btn" id="hideBtn" style="left: 15px;" onclick="toggleHide()">🙈</button>
+<button class="sort-btn" onclick="toggleSortMode()">⇅ 排序</button>
+
         <div id="canvas-holder"><canvas id="assetChart"></canvas></div>
         <div id="todayDisplay" style="color: var(--subtext); font-size: 0.75rem; margin-top:10px;"></div>
         <button class="sync-btn" id="syncBtn" onclick="syncAllPrices()">🔄 更新現有項目股價</button>
@@ -212,7 +237,10 @@ defaultCats.forEach(cat => {
         categories.push(cat); // 如果舊資料沒這個分類，就補在最後面
     }
 });
-    let assets = JSON.parse(localStorage.getItem('percento_dark_data')) || [];
+
+let assets = JSON.parse(localStorage.getItem('percento_dark_data')) || [];
+let isHidden = localStorage.getItem('percento_hidden') === 'true';
+
     const COLORS = ['#0a84ff','#64d2ff','#ff9f0a','#30d158','#bf5af2','#5e5ce6','#64d2ff','#ff453a','#5856d6'];
     let usdToTwd = 32.5, chart, currentTotal = 0, isSorting = false;
 
@@ -222,14 +250,14 @@ defaultCats.forEach(cat => {
         afterDraw: (chart) => {
             const { ctx, chartArea: { top, bottom, left, right, width, height } } = chart;
             ctx.save();
-            const text = '$' + Math.round(currentTotal).toLocaleString();
-            ctx.font = `bold 20px sans-serif`;
-            ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-            ctx.fillStyle = currentTotal < 0 ? '#ff453a' : '#ffffff';
-            ctx.fillText(text, left + width / 2, top + height / 2);
-            ctx.restore();
-        }
-    });
+const text = isHidden ? '****' : '$' + Math.round(currentTotal).toLocaleString(); 
+        ctx.font = `bold 18px sans-serif`;
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillStyle = currentTotal < 0 ? '#ff453a' : '#ffffff';
+        ctx.fillText(text, left + width / 2, top + height / 2);
+        ctx.restore();
+    }
+});
 
     // 確保選單在手機版成功初始化的保險機制
     function initCategorySelect() {
@@ -329,9 +357,23 @@ async function handleNewItem() {
     document.getElementById('debtFields').style.display = 'none';
 }
 
+// 直接插入這個新函數
+function toggleHide() {
+    isHidden = !isHidden;
+    localStorage.setItem('percento_hidden', isHidden);
+    const btn = document.getElementById('hideBtn');
+    if (btn) {
+        btn.innerHTML = isHidden ? 
+            `<svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>` : 
+            `<svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>`;
+    }
+    refresh();
+}
+
+
 function toggleSortMode() {
     isSorting = !isSorting;
-    const btn = document.querySelector('.sort-btn');
+    const btn = document.querySelector('.sort-btn:not(#hideBtn)');
     
     if (isSorting) {
         btn.innerText = "✅ 完成";
@@ -391,7 +433,7 @@ function refresh() {
         
         const display = document.getElementById('todayDisplay');
         if (display) {
-            display.innerText = `更新時間 ${now.getMonth() + 1} 月 ${curDay} 日 ${timeString}`;
+            display.innerText = `更新時間 ${now.getMonth() + 1}/${curDay} ${timeString}`;
         }
         // ------------------
 
@@ -427,7 +469,7 @@ function refresh() {
                                 <button class="sort-btn" style="position:static" onclick="event.stopPropagation(); moveCat(${idx},1)">↓</button>
                             </div>
                         ` : `
-                            <span style="font-weight:700; color:${g.sum < 0 ? 'var(--negative)' : 'var(--primary)'}">$${Math.round(g.sum).toLocaleString()}</span>
+<span style="font-weight:700; color:${g.sum < 0 ? 'var(--negative)' : 'var(--primary)'}">${isHidden ? '****' : '$' + Math.round(g.sum).toLocaleString()}</span>
                         `}
                     </div>
                     <div class="category-content">
@@ -458,7 +500,7 @@ ${g.items.map(item => `
     </div>
 
     <div style="text-align:right; display: flex; flex-direction: column; justify-content: center;">
-        <div style="font-weight:700; font-size: 1.1rem; color:${item.val < 0 ? 'var(--negative)' : 'white'}">$${Math.round(item.val).toLocaleString()}</div>
+<div style="font-weight:700; font-size: 1.1rem; color:${item.val < 0 ? 'var(--negative)' : 'white'}">${isHidden ? '****' : '$' + Math.round(item.val).toLocaleString()}</div>
         <span class="remove-link" style="cursor:pointer;" onclick="if(confirm('確定移除？')){assets.splice(${item.i},1); saveAndRefresh();}">移除</span>
     </div>
 </div>
@@ -533,6 +575,13 @@ responsive: true,
 
     // 啟動初始化
 window.onload = async () => {
+    isHidden = localStorage.getItem('percento_hidden') === 'true';
+    const btn = document.getElementById('hideBtn');
+    if(btn) {
+        btn.innerHTML = isHidden ? 
+            `<svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>` : 
+            `<svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>`;
+    }
     initCategorySelect();
     
     // 從雲端抓取資產清單

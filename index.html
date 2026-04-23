@@ -431,27 +431,35 @@ function refresh() {
                         `}
                     </div>
                     <div class="category-content">
+
 ${g.items.map(item => `
 <div class="detail-item">
-    <div>
-        <b onclick="const n=prompt('修改名稱', '${item.symbol}'); if(n){assets[${item.i}].symbol=n; saveAndRefresh();}">${item.symbol}</b><br>
-        
-        <div class="qty-badge" style="cursor:pointer" onclick="const q=prompt('修改數量/金額', '${item.qty}'); if(q!==null){assets[${item.i}].qty=Number(q); saveAndRefresh();}">
+    <div style="flex: 1;">
+        <div style="display:flex; align-items:center; gap:8px; margin-bottom: 4px;">
+            <b style="cursor:pointer;" onclick="const n=prompt('修改名稱', '${item.symbol}'); if(n){assets[${item.i}].symbol=n; saveAndRefresh();}">${item.symbol}</b>
+            <span style="cursor:pointer; font-size:0.65rem; color:var(--subtext); background:rgba(255,255,255,0.05); border:1px solid #444; padding:2px 6px; border-radius:4px;" 
+                  onclick="changeItemCategory(${item.i})">變更分類 ❯</span>
+        </div>
+
+        <div class="qty-badge" style="cursor:pointer; margin-bottom: 4px;" onclick="const q=prompt('修改數量/金額', '${item.qty}'); if(q!==null){assets[${item.i}].qty=Number(q); saveAndRefresh();}">
             ${item.displayQty.toLocaleString()} ${item.category.includes('股')?'股':(item.currency==='USD'?'美元':'台幣')} ✎
         </div>
         
-${item.type === 'auto' ? `
-    <div class="price-tag" style="${item.currency === 'USD' ? 'color: var(--primary); background: rgba(10, 132, 255, 0.1);' : ''}">
-        ${item.currency === 'USD' ? 'USD' : 'TWD'} ${item.price.toFixed(2)} 
-        ${item.originalSymbol && item.originalSymbol !== item.symbol ? `(${item.originalSymbol})` : ''}
-    </div>` 
-: ''}
+        ${item.type === 'auto' ? `
+            <div style="display: block;">
+                <div class="price-tag" style="display: inline-block; width: auto; ${item.currency === 'USD' ? 'color: var(--primary); background: rgba(10, 132, 255, 0.1);' : ''}">
+                    ${item.currency === 'USD' ? 'USD' : 'TWD'} ${item.price.toFixed(2)} 
+                    ${item.originalSymbol && item.originalSymbol !== item.symbol ? `(${item.originalSymbol})` : ''}
+                </div>
+            </div>` 
+        : ''}
 
-        ${item.isRepaid ? `<br><span class="price-tag" style="background:rgba(50,215,75,0.1); color:var(--success)">本月已還款</span>` : ''}
+        ${item.isRepaid ? `<div style="margin-top:4px;"><span class="price-tag" style="background:rgba(50,215,75,0.1); color:var(--success)">本月已還款</span></div>` : ''}
     </div>
-    <div style="text-align:right">
-        <div style="font-weight:700; color:${item.val < 0 ? 'var(--negative)' : 'white'}">$${Math.round(item.val).toLocaleString()}</div>
-        <span class="remove-link" onclick="if(confirm('確定移除？')){assets.splice(${item.i},1); saveAndRefresh();}">移除</span>
+
+    <div style="text-align:right; display: flex; flex-direction: column; justify-content: center;">
+        <div style="font-weight:700; font-size: 1.1rem; color:${item.val < 0 ? 'var(--negative)' : 'white'}">$${Math.round(item.val).toLocaleString()}</div>
+        <span class="remove-link" style="cursor:pointer;" onclick="if(confirm('確定移除？')){assets.splice(${item.i},1); saveAndRefresh();}">移除</span>
     </div>
 </div>
 `).join('')}
@@ -489,6 +497,11 @@ type: 'doughnut',
         }]
     },
     options: { 
+responsive: true,
+    maintainAspectRatio: false,
+    layout: {
+        padding: 15 // 🔴 加入這行，給圓餅圖留 15px 的呼吸空間
+    },
         cutout: '75%', // 稍微調細一點點，放大效果更明顯
         plugins: { 
             legend: { display: false }, // 依然隱藏上方預設圖例，使用我們自製的
@@ -500,28 +513,23 @@ type: 'doughnut',
                 padding: 12,
                 cornerRadius: 10,
                 displayColors: true, // 顯示顏色小點
-                callbacks: {
-                    label: function(context) {
-                        let label = context.label || '';
-                        let value = context.parsed || 0;
-                        let percent = ((value / absTotal) * 100).toFixed(1);
-                        return ` ${label}: $${Math.round(value).toLocaleString()} (${percent}%)`;
-                    }
+    position: 'nearest', 
+    yAlign: 'bottom',
+    external: null, 
+    callbacks: {
+        label: function(context) {
+            let label = context.label || '';
+            let value = context.parsed || 0;
+            let percent = ((value / absTotal) * 100).toFixed(1);
+            return ` ${label}: $${Math.round(value).toLocaleString()} (${percent}%)`;
+}
                 }
-            }
-        }, 
-        maintainAspectRatio: false,
-        layout: {
-            padding: 10 // 給予一點緩衝空間讓它彈出時不會被切到
-        },
-        // 點擊或滑鼠靠近時的動畫
-        animation: {
-            animateRotate: true,
-            animateScale: true
-        }
-    }
-});
-    }
+            } // 這裡結束 tooltip
+        } // 這裡結束 plugins
+    } // 這裡結束 options
+}); // 🔴 重要：這裡結束 new Chart(...)
+
+} // 🔴 重要：這裡結束整個 updateChart 函數
 
     // 啟動初始化
 window.onload = async () => {
@@ -557,6 +565,28 @@ document.getElementById('repayDay').value = '';
 document.getElementById('repayAmount').value = '';
 document.getElementById('enableRepay').checked = false; // 重設滑塊開關
 document.getElementById('debtFields').style.display = 'none'; // 隱藏欄位
+
+function changeItemCategory(index) {
+    // 建立一個分類清單字串供使用者選擇
+    const catList = categories.map((c, i) => `${i + 1}. ${c}`).join('\n');
+    const choice = prompt(`請輸入數字選擇新分類：\n${catList}`, "");
+    
+    if (choice !== null) {
+        const num = parseInt(choice) - 1;
+        if (num >= 0 && num < categories.length) {
+            const newCat = categories[num];
+            // 關鍵：修改資產的分類
+            assets[index].category = newCat;
+            
+            // 關鍵：根據新分類自動調整幣別 (這很重要，否則美股轉台幣會計算錯誤)
+            assets[index].currency = (newCat === "美元活存" || newCat === "美股") ? "USD" : "TWD";
+            
+            saveAndRefresh();
+        } else {
+            alert("無效的選擇");
+        }
+    }
+}
     
     // 手機版載入補強機制
     setTimeout(initCategorySelect, 500);

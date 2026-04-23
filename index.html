@@ -5,6 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Percento Pro - Mobile Optimized</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2"></script>
     <style>
         :root { 
             --bg: #000000; --card: #1c1c1e; --primary: #0a84ff; 
@@ -526,69 +528,107 @@ ${g.items.map(item => `
         updateChart(groups);
     }
 
-    function updateChart(groups) {
-        const ctx = document.getElementById('assetChart').getContext('2d');
-        const legend = document.getElementById('chartLegend'); legend.innerHTML = '';
-        if (chart) chart.destroy();
-        const labels = [], data = [], bg = [];
-        let absTotal = 0; categories.forEach(c => absTotal += Math.abs(groups[c].sum));
+function updateChart(groups) {
+    const ctx = document.getElementById('assetChart').getContext('2d');
+    const labels = [];
+    const data = [];
+    const bg = [];
+    let absTotal = 0;
 
-        categories.forEach((cat, i) => {
-            if (groups[cat].sum !== 0) {
-                const val = Math.abs(groups[cat].sum);
-                const color = COLORS[i % COLORS.length];
-                labels.push(cat); data.push(val); bg.push(color);
-                legend.innerHTML += `<div class="legend-item"><div style="display:flex; align-items:center"><div class="color-dot" style="background:${color}"></div>${cat}</div><div>${absTotal?((val/absTotal)*100).toFixed(1):0}%</div></div>`;
+    categories.forEach((name, i) => {
+        const val = Math.abs(groups[name].sum);
+        if (val > 0) {
+            labels.push(name);
+            data.push(Math.round(val));
+            bg.push(COLORS[i % COLORS.length]);
+            absTotal += val;
+        }
+    });
+
+    if (chart) chart.destroy();
+
+    chart = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+            labels: labels,
+            datasets: [{
+                data: data,
+                backgroundColor: bg,
+                borderWidth: 2,
+                borderColor: 'var(--card)',
+                hoverOffset: 15
+            }]
+        },
+        plugins: [ChartDataLabels, {
+            id: 'centerText',
+            afterDraw: (chart) => {
+                const { ctx, chartArea: { top, bottom, left, right, width, height } } = chart;
+                ctx.save();
+                const text = isHidden ? '$***,***' : '$' + Math.round(currentTotal).toLocaleString(); 
+                ctx.font = `bold 18px sans-serif`;
+                ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+                ctx.fillStyle = currentTotal < 0 ? '#ff453a' : '#ffffff';
+                ctx.fillText(text, left + width / 2, top + height / 2);
+                ctx.restore();
             }
-        });
-        chart = new Chart(ctx, {
-type: 'doughnut',
-    data: { 
-        labels: labels, // 補回標籤，Tooltip 才能顯示名稱
-        datasets: [{ 
-            data, 
-            backgroundColor: bg, 
-            borderWidth: 2, // 稍微增加邊框感
-            borderColor: 'var(--card)', // 邊框顏色與背景一致
-            hoverOffset: 15 // 關鍵：滑鼠靠近時彈出的距離
-        }]
-    },
-    options: { 
-responsive: true,
-    maintainAspectRatio: false,
-    layout: {
-        padding: 15 // 🔴 加入這行，給圓餅圖留 15px 的呼吸空間
-    },
-        cutout: '75%', // 稍微調細一點點，放大效果更明顯
-        plugins: { 
-            legend: { display: false }, // 依然隱藏上方預設圖例，使用我們自製的
-            tooltip: {
-                enabled: true, // 開啟提示框
-                backgroundColor: 'rgba(28, 28, 30, 0.9)', // 深色背景
-                titleFont: { size: 14 },
-                bodyFont: { size: 14 },
-                padding: 12,
-                cornerRadius: 10,
-                displayColors: true, // 顯示顏色小點
-    position: 'nearest', 
-    yAlign: 'bottom',
-    external: null, 
-    callbacks: {
-        label: function(context) {
-            let label = context.label || '';
-            let value = context.parsed || 0;
-            let percent = ((value / absTotal) * 100).toFixed(1);
-            return ` ${label}: $${Math.round(value).toLocaleString()} (${percent}%)`;
-}
+        }], 
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            layout: { padding: 15}, // 加大邊距防止 Tooltip 超出畫布
+            cutout: '65%', 
+            plugins: {
+                legend: { display: false },
+                datalabels: {
+                    color: '#fff',
+                    font: { weight: 'bold', size: 11 },
+                    formatter: (value) => {
+                        if (isHidden) return '';
+                        let percentage = ((value / absTotal) * 100).toFixed(1) + '%';
+                        return (value / absTotal > 0.05) ? percentage : '';
+                    },
+                    anchor: 'center',
+                    align: 'center'
+                },
+                // ✨ 修正重點：合併成單一 Tooltip 區塊，並設定正確位移
+                tooltip: {
+                    enabled: true,
+                    yAlign: 'bottom',    // 強制往上飄
+                    caretPadding: 30,    // 距離圓環 30px，避開中心數字
+                    backgroundColor: 'rgba(28, 28, 30, 0.95)',
+                    padding: 12,
+                    cornerRadius: 10,
+                    displayColors: true,
+                    callbacks: {
+                        label: function(context) {
+                            if (isHidden) return ' 已隱藏';
+                            let label = context.label || '';
+                            let value = context.parsed || 0;
+                            let percent = ((value / absTotal) * 100).toFixed(1);
+                            return ` ${label}: $${Math.round(value).toLocaleString()} (${percent}%)`;
+                        }
+                    }
                 }
-            } // 這裡結束 tooltip
-        } // 這裡結束 plugins
-    } // 這裡結束 options
-}); // 🔴 重要：這裡結束 new Chart(...)
+            }
+        }
+    });
 
-} // 🔴 重要：這裡結束整個 updateChart 函數
-
-    // 啟動初始化
+    // 更新圖例卡片
+    const legend = document.getElementById('chartLegend');
+    if (legend) {
+        legend.innerHTML = labels.map((l, i) => `
+            <div class="legend-item">
+                <div style="display:flex; align-items:center;">
+                    <div class="color-dot" style="background:${bg[i]}"></div>
+                    <span>${l}</span>
+                </div>
+                <span style="color:var(--subtext); margin-left:5px;">
+                    ${isHidden ? '**%' : ((data[i]/absTotal)*100).toFixed(1)+'%'}
+                </span>
+            </div>
+        `).join('');
+    }
+}    // 啟動初始化
 window.onload = async () => {
     isHidden = true;
     isVerified = false;

@@ -240,6 +240,7 @@ defaultCats.forEach(cat => {
 
 let assets = JSON.parse(localStorage.getItem('percento_dark_data')) || [];
 let isHidden = true;
+let isVerified = false;
 
     const COLORS = ['#0a84ff','#64d2ff','#ff9f0a','#30d158','#bf5af2','#5e5ce6','#64d2ff','#ff453a','#5856d6'];
     let usdToTwd = 32.5, chart, currentTotal = 0, isSorting = false;
@@ -250,7 +251,7 @@ let isHidden = true;
         afterDraw: (chart) => {
             const { ctx, chartArea: { top, bottom, left, right, width, height } } = chart;
             ctx.save();
-const text = isHidden ? '****' : '$' + Math.round(currentTotal).toLocaleString(); 
+const text = isHidden ? '$***,***' : '$' + Math.round(currentTotal).toLocaleString(); 
         ctx.font = `bold 18px sans-serif`;
         ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
         ctx.fillStyle = currentTotal < 0 ? '#ff453a' : '#ffffff';
@@ -359,8 +360,22 @@ async function handleNewItem() {
 
 // 直接插入這個新函數
 function toggleHide() {
+const SET_PASSWORD = "5257"; // 🔴 在這裡設定你的專屬密碼
+
+    // 密碼正確或是本來要「關閉」眼睛，才執行切換
+if (!isVerified && isHidden) {
+        const userInput = prompt("請輸入密碼：");
+        if (userInput === SET_PASSWORD) {
+            isVerified = true; // 密碼正確，標記為已驗證
+        } else {
+            alert("密碼錯誤！");
+            return; // 驗證失敗，中斷切換
+        }
+    }
+
+    // 只要通過驗證，或只是要關閉眼睛，都直接執行切換
     isHidden = !isHidden;
-    localStorage.setItem('percento_hidden', isHidden);
+    
     const btn = document.getElementById('hideBtn');
     if (btn) {
         btn.innerHTML = isHidden ? 
@@ -576,6 +591,7 @@ responsive: true,
     // 啟動初始化
 window.onload = async () => {
     isHidden = true;
+    isVerified = false;
     const btn = document.getElementById('hideBtn');
     if(btn) {
         btn.innerHTML = isHidden ? 

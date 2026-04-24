@@ -107,24 +107,47 @@ input:not([type="checkbox"]), select {
         .color-dot { width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; }
 
 /* --- 讓按鍵呈現圓形、磨砂質感的 iOS 風格 --- */
+/* --- 優化後的按鍵樣式 --- */
 .num-key {
     width: 80px;
     height: 80px;
     border-radius: 50%;
-    background: rgba(255,255,255,0.1);
+    background: rgba(255, 255, 255, 0.1);
     color: white;
     border: none;
     font-size: 1.8rem;
     font-weight: 400;
     cursor: pointer;
     backdrop-filter: blur(10px);
-    transition: background 0.2s;
+    
+    /* 1. 加入平滑過渡效果 */
+    transition: all 0.1s cubic-bezier(0.4, 0, 0.2, 1); 
+    
+    /* 防止手機長按彈出選單 */
+    -webkit-user-select: none;
+    user-select: none;
 }
+
+}
+
+/* 點擊時的視覺回饋：稍微放大 + 變亮 */
 .num-key:active {
-    background: rgba(255,255,255,0.3);
+    transform: scale(1.15); /* 🔴 關鍵：放大 1.15 倍 */
+    background: rgba(255, 255, 255, 0.3); /* 變亮 */
+    box-shadow: 0 0 15px rgba(255, 255, 255, 0.2); /* 增加一點點光暈感 */
 }
+
+/* 替換後的版本：包含顏色、縮放動畫 */
 .dot-filled {
-    background: white !important;
+    background-color: white !important;
+    animation: dot-pop 0.2s ease-out; /* 觸發跳動動畫 */
+}
+
+/* 這是動畫的定義，也要記得貼進 CSS 裡 */
+@keyframes dot-pop {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.3); }
+    100% { transform: scale(1); }
 }
 
 /* --- 🔴 強制修正：讓 Checkbox 變身 iOS 滑塊 --- */

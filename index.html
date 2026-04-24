@@ -744,6 +744,13 @@ function pressKey(num) {
     }
 }
 
+function deleteKey() {
+    if (currentInputPwd.length > 0) {
+        currentInputPwd = currentInputPwd.slice(0, -1); // 刪除最後一位
+        updateDots(); // 更新圓點顯示
+    }
+}
+
 function authFailed() {
     alert("密碼錯誤");
     currentInputPwd = "";
@@ -796,15 +803,13 @@ function updateDots() {
 
         <button class="num-key" onclick="pressKey('8')">8</button>
 
-        <button class="num-key" onclick="pressKey('9')">9</button>
-
-        <div style="width:80px;"></div>
-
-        <button class="num-key" onclick="pressKey('0')">0</button>
-
-        <button class="num-key" style="font-size:1rem; background:transparent;" onclick="closePwdModal()">取消</button>
-
-    </div>
+<button class="num-key" onclick="pressKey('9')">9</button>
+    
+    <button class="num-key" style="font-size:1.2rem;" onclick="deleteKey()">⌫</button>
+    
+    <button class="num-key" onclick="pressKey('0')">0</button>
+    <button class="num-key" style="font-size:1rem; background:transparent;" onclick="closePwdModal()">取消</button>
+</div>
 
 </div>
 

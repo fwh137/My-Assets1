@@ -5,8 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Percento Pro - Mobile Optimized</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2"></script>
     <style>
         :root { 
             --bg: #000000; --card: #1c1c1e; --primary: #0a84ff; 
@@ -107,6 +105,27 @@ input:not([type="checkbox"]), select {
         .legend-card { background: #2c2c2e; border-radius: 20px; padding: 15px; margin-top: 15px; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
         .legend-item { display: flex; align-items: center; justify-content: space-between; font-size: 0.8rem; }
         .color-dot { width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; }
+
+/* --- 讓按鍵呈現圓形、磨砂質感的 iOS 風格 --- */
+.num-key {
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.1);
+    color: white;
+    border: none;
+    font-size: 1.8rem;
+    font-weight: 400;
+    cursor: pointer;
+    backdrop-filter: blur(10px);
+    transition: background 0.2s;
+}
+.num-key:active {
+    background: rgba(255,255,255,0.3);
+}
+.dot-filled {
+    background: white !important;
+}
 
 /* --- 🔴 強制修正：讓 Checkbox 變身 iOS 滑塊 --- */
 .check-row {
@@ -223,6 +242,12 @@ input:not([type="checkbox"]), select {
 </div>
 
 <script>
+let currentInputPwd = "";
+let pendingCat = ""; 
+let pwdMode = ""; // 紀錄模式：'unlockEye' 或 'unhideCat'
+const SET_PASSWORD = "5257";    // 眼睛切換密碼
+const UNHIDE_PASSWORD = "5757"; // 開啟隱藏分類密碼
+
     // 你的 Google Apps Script URL
     const YOUR_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbymGrkXe24-JaWEvT6lYMQBaBsyYTy5_lAiDfIxAORQ_yYqoCfYxgRLgXCjR0BETyqC/exec";
     
@@ -243,6 +268,8 @@ defaultCats.forEach(cat => {
 let assets = JSON.parse(localStorage.getItem('percento_dark_data')) || [];
 let isHidden = true;
 let isVerified = false;
+// 紀錄哪些分類被手動隱藏了
+let hiddenCategories = JSON.parse(localStorage.getItem('percento_hidden_cats')) || [];
 
     const COLORS = ['#0a84ff','#64d2ff','#ff9f0a','#30d158','#bf5af2','#5e5ce6','#64d2ff','#ff453a','#5856d6'];
     let usdToTwd = 32.5, chart, currentTotal = 0, isSorting = false;
@@ -303,8 +330,32 @@ const text = isHidden ? '$***,***' : '$' + Math.round(currentTotal).toLocaleStri
 
 async function handleNewItem() {
     const code = document.getElementById('code').value.trim();
-    const qty = Number(document.getElementById('qty').value);
     const cat = document.getElementById('categorySelect').value;
+    
+    if (!code || !cat) { alert("請填寫名稱與選擇分類"); return; }
+
+    // --- 🔴 隱藏指令檢查 ---
+    if (code === "隱藏") {
+    if (!cat) { alert("請選擇要隱藏的分類"); return; }
+    if (!hiddenCategories.includes(cat)) {
+        hiddenCategories.push(cat);
+        localStorage.setItem('percento_hidden_cats', JSON.stringify(hiddenCategories));
+    }
+    // 不顯示任何提示文字，直接清空並刷新
+    document.getElementById('code').value = '';
+    refresh();
+    return; 
+}
+
+if (code === "開啟") {
+    if (!cat) { alert("請選擇要開啟的分類"); return; }
+        pendingCat = cat; // 紀錄分類名稱
+        pwdMode = "unhideCat";
+        showPwdModal();   // 呼叫自定義鍵盤
+        document.getElementById('code').value = '';
+        return; 
+    }
+    const qty = Number(document.getElementById('qty').value);
     const type = document.getElementById('itemType').value;
     const isRepay = document.getElementById('enableRepay').checked;
 
@@ -360,24 +411,18 @@ async function handleNewItem() {
     document.getElementById('debtFields').style.display = 'none';
 }
 
-// 直接插入這個新函數
+// --- 眼睛圖示切換邏輯 ---
 function toggleHide() {
-const SET_PASSWORD = "5257"; // 🔴 在這裡設定你的專屬密碼
-
-    // 密碼正確或是本來要「關閉」眼睛，才執行切換
-if (!isVerified && isHidden) {
-        const userInput = prompt("請輸入密碼：");
-        if (userInput === SET_PASSWORD) {
-            isVerified = true; // 密碼正確，標記為已驗證
-        } else {
-            alert("密碼錯誤！");
-            return; // 驗證失敗，中斷切換
-        }
+    if (!isVerified && isHidden) {
+        pwdMode = "unlockEye"; 
+        showPwdModal(); // 改為呼叫鍵盤
+    } else {
+        executeToggleHide();
     }
+}
 
-    // 只要通過驗證，或只是要關閉眼睛，都直接執行切換
+function executeToggleHide() {
     isHidden = !isHidden;
-    
     const btn = document.getElementById('hideBtn');
     if (btn) {
         btn.innerHTML = isHidden ? 
@@ -386,7 +431,6 @@ if (!isVerified && isHidden) {
     }
     refresh();
 }
-
 
 function toggleSortMode() {
     isSorting = !isSorting;
@@ -458,6 +502,7 @@ function refresh() {
         categories.forEach(c => groups[c] = { sum: 0, items: [] });
         
         assets.forEach((a, i) => {
+            if (hiddenCategories.includes(a.category)) return;
             let finalQty = a.qty;
             let isRepaid = false;
             if (a.qty < 0 && a.repayDay > 0 && curDay >= a.repayDay) {
@@ -475,6 +520,7 @@ function refresh() {
 
         categories.forEach((name, idx) => {
             const g = groups[name];
+            if (hiddenCategories.includes(name)) return; 
             if (!isSorting && g.items.length === 0) return;
             container.innerHTML += `
                 <div class="category-group">
@@ -504,14 +550,14 @@ ${g.items.map(item => `
             ${item.displayQty.toLocaleString()} ${item.category.includes('股')?'股':(item.currency==='USD'?'美元':'台幣')} ✎
         </div>
         
-        ${item.type === 'auto' ? `
-            <div style="display: block;">
-                <div class="price-tag" style="display: inline-block; width: auto; ${item.currency === 'USD' ? 'color: var(--primary); background: rgba(10, 132, 255, 0.1);' : ''}">
-                    ${item.currency === 'USD' ? 'USD' : 'TWD'} ${item.price.toFixed(2)} 
-                    ${item.originalSymbol && item.originalSymbol !== item.symbol ? `(${item.originalSymbol})` : ''}
-                </div>
-            </div>` 
-        : ''}
+${item.type === 'auto' ? `
+    <div style="display: block;">
+        <div class="price-tag ${item.currency === 'USD' ? 'price-tag-usd' : ''}" style="display: inline-block; width: auto;">
+            ${item.currency === 'USD' ? 'USD' : 'TWD'} ${item.price.toFixed(2)} 
+            ${item.originalSymbol && item.originalSymbol !== item.symbol ? `(${item.originalSymbol})` : ''}
+        </div>
+    </div>` 
+: ''}
 
         ${item.isRepaid ? `<div style="margin-top:4px;"><span class="price-tag" style="background:rgba(50,215,75,0.1); color:var(--success)">本月已還款</span></div>` : ''}
     </div>
@@ -528,107 +574,69 @@ ${g.items.map(item => `
         updateChart(groups);
     }
 
-function updateChart(groups) {
-    const ctx = document.getElementById('assetChart').getContext('2d');
-    const labels = [];
-    const data = [];
-    const bg = [];
-    let absTotal = 0;
+    function updateChart(groups) {
+        const ctx = document.getElementById('assetChart').getContext('2d');
+        const legend = document.getElementById('chartLegend'); legend.innerHTML = '';
+        if (chart) chart.destroy();
+        const labels = [], data = [], bg = [];
+        let absTotal = 0; categories.forEach(c => absTotal += Math.abs(groups[c].sum));
 
-    categories.forEach((name, i) => {
-        const val = Math.abs(groups[name].sum);
-        if (val > 0) {
-            labels.push(name);
-            data.push(Math.round(val));
-            bg.push(COLORS[i % COLORS.length]);
-            absTotal += val;
-        }
-    });
-
-    if (chart) chart.destroy();
-
-    chart = new Chart(ctx, {
-        type: 'doughnut',
-        data: {
-            labels: labels,
-            datasets: [{
-                data: data,
-                backgroundColor: bg,
-                borderWidth: 2,
-                borderColor: 'var(--card)',
-                hoverOffset: 15
-            }]
-        },
-        plugins: [ChartDataLabels, {
-            id: 'centerText',
-            afterDraw: (chart) => {
-                const { ctx, chartArea: { top, bottom, left, right, width, height } } = chart;
-                ctx.save();
-                const text = isHidden ? '$***,***' : '$' + Math.round(currentTotal).toLocaleString(); 
-                ctx.font = `bold 18px sans-serif`;
-                ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-                ctx.fillStyle = currentTotal < 0 ? '#ff453a' : '#ffffff';
-                ctx.fillText(text, left + width / 2, top + height / 2);
-                ctx.restore();
+        categories.forEach((cat, i) => {
+            if (groups[cat].sum !== 0) {
+                const val = Math.abs(groups[cat].sum);
+                const color = COLORS[i % COLORS.length];
+                labels.push(cat); data.push(val); bg.push(color);
+                legend.innerHTML += `<div class="legend-item"><div style="display:flex; align-items:center"><div class="color-dot" style="background:${color}"></div>${cat}</div><div>${absTotal?((val/absTotal)*100).toFixed(1):0}%</div></div>`;
             }
-        }], 
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            layout: { padding: 15}, // 加大邊距防止 Tooltip 超出畫布
-            cutout: '65%', 
-            plugins: {
-                legend: { display: false },
-                datalabels: {
-                    color: '#fff',
-                    font: { weight: 'bold', size: 11 },
-                    formatter: (value) => {
-                        if (isHidden) return '';
-                        let percentage = ((value / absTotal) * 100).toFixed(1) + '%';
-                        return (value / absTotal > 0.05) ? percentage : '';
-                    },
-                    anchor: 'center',
-                    align: 'center'
-                },
-                // ✨ 修正重點：合併成單一 Tooltip 區塊，並設定正確位移
-                tooltip: {
-                    enabled: true,
-                    yAlign: 'bottom',    // 強制往上飄
-                    caretPadding: 30,    // 距離圓環 30px，避開中心數字
-                    backgroundColor: 'rgba(28, 28, 30, 0.95)',
-                    padding: 12,
-                    cornerRadius: 10,
-                    displayColors: true,
-                    callbacks: {
-                        label: function(context) {
-                            if (isHidden) return ' 已隱藏';
-                            let label = context.label || '';
-                            let value = context.parsed || 0;
-                            let percent = ((value / absTotal) * 100).toFixed(1);
-                            return ` ${label}: $${Math.round(value).toLocaleString()} (${percent}%)`;
-                        }
-                    }
+        });
+        chart = new Chart(ctx, {
+type: 'doughnut',
+    data: { 
+        labels: labels, // 補回標籤，Tooltip 才能顯示名稱
+        datasets: [{ 
+            data, 
+            backgroundColor: bg, 
+            borderWidth: 2, // 稍微增加邊框感
+            borderColor: 'var(--card)', // 邊框顏色與背景一致
+            hoverOffset: 15 // 關鍵：滑鼠靠近時彈出的距離
+        }]
+    },
+    options: { 
+responsive: true,
+    maintainAspectRatio: false,
+    layout: {
+        padding: 15 // 🔴 加入這行，給圓餅圖留 15px 的呼吸空間
+    },
+        cutout: '75%', // 稍微調細一點點，放大效果更明顯
+        plugins: { 
+            legend: { display: false }, // 依然隱藏上方預設圖例，使用我們自製的
+            tooltip: {
+                enabled: true, // 開啟提示框
+                backgroundColor: 'rgba(28, 28, 30, 0.9)', // 深色背景
+                titleFont: { size: 14 },
+                bodyFont: { size: 14 },
+                padding: 12,
+                cornerRadius: 10,
+                displayColors: true, // 顯示顏色小點
+    position: 'nearest', 
+    yAlign: 'bottom',
+    external: null, 
+    callbacks: {
+        label: function(context) {
+            let label = context.label || '';
+            let value = context.parsed || 0;
+            let percent = ((value / absTotal) * 100).toFixed(1);
+            return ` ${label}: $${Math.round(value).toLocaleString()} (${percent}%)`;
+}
                 }
-            }
-        }
-    });
+            } // 這裡結束 tooltip
+        } // 這裡結束 plugins
+    } // 這裡結束 options
+}); // 🔴 重要：這裡結束 new Chart(...)
 
-    // 更新圖例卡片
-    const legend = document.getElementById('chartLegend');
-    if (legend) {
-        legend.innerHTML = labels.map((l, i) => `
-            <div class="legend-item">
-                <div style="display:flex; align-items:center;">
-                    <div class="color-dot" style="background:${bg[i]}"></div>
-                    <span>${l}</span>
-                </div>
-                <span style="color:var(--subtext); margin-left:5px;">
-                    ${isHidden ? '**%' : ((data[i]/absTotal)*100).toFixed(1)+'%'}
-                </span>
-            </div>
-        `).join('');
-    }
-}    // 啟動初始化
+} // 🔴 重要：這裡結束整個 updateChart 函數
+
+    // 啟動初始化
 window.onload = async () => {
     isHidden = true;
     isVerified = false;
@@ -695,6 +703,111 @@ function changeItemCategory(index) {
     
     // 手機版載入補強機制
     setTimeout(initCategorySelect, 500);
+
+function showPwdModal() {
+    currentInputPwd = "";
+    updateDots();
+    document.getElementById('pwdModal').style.display = 'flex';
+}
+
+function closePwdModal() {
+    document.getElementById('pwdModal').style.display = 'none';
+}
+
+function pressKey(num) {
+    if (currentInputPwd.length < 4) {
+        currentInputPwd += num;
+        updateDots();
+    }
+    
+    if (currentInputPwd.length === 4) {
+        setTimeout(() => {
+            if (pwdMode === "unlockEye") {
+                if (currentInputPwd === SET_PASSWORD) {
+                    isVerified = true;
+                    executeToggleHide();
+                    closePwdModal();
+                } else {
+                    authFailed();
+                }
+            } else if (pwdMode === "unhideCat") {
+                if (currentInputPwd === UNHIDE_PASSWORD) {
+                    hiddenCategories = hiddenCategories.filter(c => c !== pendingCat);
+                    localStorage.setItem('percento_hidden_cats', JSON.stringify(hiddenCategories));
+                    refresh();
+                    closePwdModal();
+                } else {
+                    authFailed();
+                }
+            }
+        }, 200);
+    }
+}
+
+function authFailed() {
+    alert("密碼錯誤");
+    currentInputPwd = "";
+    updateDots();
+}
+
+function updateDots() {
+    const dots = document.querySelectorAll('#pwdDots div');
+    dots.forEach((dot, i) => {
+        if (i < currentInputPwd.length) {
+            dot.classList.add('dot-filled');
+        } else {
+            dot.classList.remove('dot-filled');
+        }
+    });
+}
+
 </script>
+<div id="pwdModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.9); z-index:9999; flex-direction:column; align-items:center; justify-content:center;">
+
+    <div style="margin-bottom:30px; font-size:1.2rem; color:var(--text);">請輸入驗證密碼</div>
+
+    <div id="pwdDots" style="display:flex; gap:15px; margin-bottom:40px;">
+
+        <div style="width:15px; height:15px; border-radius:50%; border:2px solid #fff;"></div>
+
+        <div style="width:15px; height:15px; border-radius:50%; border:2px solid #fff;"></div>
+
+        <div style="width:15px; height:15px; border-radius:50%; border:2px solid #fff;"></div>
+
+        <div style="width:15px; height:15px; border-radius:50%; border:2px solid #fff;"></div>
+
+    </div>
+
+    <div style="display:grid; grid-template-columns: repeat(3, 80px); gap:20px;">
+
+        <button class="num-key" onclick="pressKey('1')">1</button>
+
+        <button class="num-key" onclick="pressKey('2')">2</button>
+
+        <button class="num-key" onclick="pressKey('3')">3</button>
+
+        <button class="num-key" onclick="pressKey('4')">4</button>
+
+        <button class="num-key" onclick="pressKey('5')">5</button>
+
+        <button class="num-key" onclick="pressKey('6')">6</button>
+
+        <button class="num-key" onclick="pressKey('7')">7</button>
+
+        <button class="num-key" onclick="pressKey('8')">8</button>
+
+        <button class="num-key" onclick="pressKey('9')">9</button>
+
+        <div style="width:80px;"></div>
+
+        <button class="num-key" onclick="pressKey('0')">0</button>
+
+        <button class="num-key" style="font-size:1rem; background:transparent;" onclick="closePwdModal()">取消</button>
+
+    </div>
+
+</div>
+
+
 </body>
 </html>

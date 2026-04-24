@@ -484,28 +484,29 @@ function toggleSortMode() {
     }
 
 async function saveAndRefresh() {
-    // 1. 先存本地 (確保斷網也能用)
+    // 1. 先存本地
     localStorage.setItem('percento_dark_data', JSON.stringify(assets));
-    
-    // 2. 重新渲染畫面
+    localStorage.setItem('percento_hidden_cats', JSON.stringify(hiddenCategories));
+
     refresh();
 
-    // 3. 非同步上傳雲端 (路徑 B 核心)
     const status = document.getElementById('status');
     status.innerText = "☁️ 雲端備份中...";
     try {
-        const response = await fetch(YOUR_SCRIPT_URL, {
+        await fetch(YOUR_SCRIPT_URL, {
             method: "POST",
-            mode: 'no-cors', // 解決手機端跨網域存取問題
-            headers: {
-                "Content-Type": "application/json",
-            },
-            body: JSON.stringify({ action: "saveAssets", data: assets })
+            mode: 'no-cors',
+            headers: { "Content-Type": "application/json" },
+            // 🔴 關鍵：把 hiddenCats 一併打包上傳
+            body: JSON.stringify({ 
+                action: "saveAllData", 
+                assets: assets,
+                hiddenCats: hiddenCategories 
+            })
         });
         status.innerText = "✅ 已備份至雲端";
     } catch(e) {
-        console.error(e);
-        status.innerText = "⚠️ 雲端備份失敗 (僅存於本地)";
+        status.innerText = "⚠️ 備份失敗";
     }
 }
 
@@ -676,17 +677,30 @@ window.onload = async () => {
     }
     initCategorySelect();
     
-    // 從雲端抓取資產清單
-    document.getElementById('status').innerText = "☁️ 正在從雲端同步資產...";
+// 從雲端抓取所有數據 (資產 + 隱藏清單)
+    document.getElementById('status').innerText = "☁️ 正在從雲端同步設定...";
     try {
-        const res = await fetch(`${YOUR_SCRIPT_URL}?action=getAssets`);
+        // 🔴 這裡 action 改為 getAllData，一次抓回資產和隱藏設定
+        const res = await fetch(`${YOUR_SCRIPT_URL}?action=getAllData`);
         const cloudData = await res.json();
-        if (cloudData && cloudData.length > 0) {
-            assets = cloudData; // 覆蓋本地舊資料
-            localStorage.setItem('percento_dark_data', JSON.stringify(assets));
+        
+        if (cloudData) {
+            // 同步資產
+            if (cloudData.assets && cloudData.assets.length > 0) {
+                assets = cloudData.assets;
+                localStorage.setItem('percento_dark_data', JSON.stringify(assets));
+            }
+            // 🔴 關鍵：同步隱藏分類清單
+            if (cloudData.hiddenCats) {
+                hiddenCategories = cloudData.hiddenCats;
+                localStorage.setItem('percento_hidden_cats', JSON.stringify(hiddenCategories));
+            }
         }
     } catch(e) {
-        console.log("雲端抓取失敗，使用本地資料");
+        console.log("雲端同步失敗，使用本地存檔");
+        // 失敗時，至少從本地讀取隱藏清單，避免手機端完全沒設定
+        const localHidden = localStorage.getItem('percento_hidden_cats');
+        if (localHidden) hiddenCategories = JSON.parse(localHidden);
     }
 
     // 原有的匯率同步

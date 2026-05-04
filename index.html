@@ -533,11 +533,24 @@ function refresh() {
             if (hiddenCategories.includes(a.category)) return;
             let finalQty = a.qty;
             let isRepaid = false;
-            if (a.qty < 0 && a.repayDay > 0 && curDay >= a.repayDay) {
-                finalQty = a.qty + a.repayAmount;
-                if (finalQty > 0) finalQty = 0;
-                isRepaid = true;
-            }
+const currentMonth = now.getMonth() + 1; // 取得當前月份
+
+// 判斷是否為「本月已扣」：
+// 1. 檢查資料中是否記錄了本月已手動執行 (假設你有 a.lastRepayMonth)
+// 2. 或者：今天還沒到扣款日 (代表應該延續上個月扣完後的結果)
+let isRepaidLogic = (currentMonth === a.lastRepayMonth);
+
+if (curDay < a.repayDay && !isRepaidLogic) {
+    // 如果今天還沒到扣款日，強制視為「已扣狀態」，不重置金額
+    isRepaidLogic = true; 
+}
+
+// 套用邏輯
+if (a.qty < 0 && a.repayDay > 0 && isRepaidLogic) {
+    finalQty = a.qty + a.repayAmount;
+    if (finalQty > 0) finalQty = 0;
+    isRepaid = true;
+}
             const val = a.currency === 'USD' ? (a.price * finalQty * usdToTwd) : (a.price * finalQty);
             if (groups[a.category]) {
                 groups[a.category].sum += val;

@@ -282,7 +282,7 @@ const UNHIDE_PASSWORD = "5757"; // 開啟隱藏分類密碼
 let savedCats = JSON.parse(localStorage.getItem('percento_cat_order')) || [];
 
 // 2. 定義「一定要有」的標準分類
-const defaultCats = ["台幣活存", "台幣現金", "台股", "存股", "美股", "美元活存", "投資", "貸款", "其他"];
+const defaultCats = ["台幣活存", "台幣現金", "台股", "存股", "美股", "美元活存", "投資", "貸款", "其他", "收入", "支出"];
 
 // 3. 合併：保留舊排序，並補上清單中「缺少的」預設分類
 let categories = [...savedCats];
@@ -298,7 +298,7 @@ let isVerified = false;
 // 紀錄哪些分類被手動隱藏了
 let hiddenCategories = JSON.parse(localStorage.getItem('percento_hidden_cats')) || [];
 
-    const COLORS = ['#0a84ff','#64d2ff','#ff9f0a','#30d158','#bf5af2','#5e5ce6','#64d2ff','#ff453a','#5856d6'];
+    const COLORS = ['#0a84ff','#64d2ff','#ff9f0a','#30d158','#bf5af2','#5e5ce6','#64d2ff','#ff453a','#5856d6','#0a84ff','#ff453a'];
     let usdToTwd = 32.5, chart, currentTotal = 0, isSorting = false;
 
     // 圓環中心文字插件
@@ -417,7 +417,8 @@ if (code === "開啟") {
         price: price, 
         currency: currency, 
         type: type, 
-        category: cat 
+        category: cat,
+        date: new Date().toISOString()
     };
 
     // 處理還款邏輯
@@ -518,6 +519,7 @@ function refresh() {
         // --- 時間顯示邏輯 ---
         const now = new Date();
         const curDay = now.getDate(); // 統一從 now 取得日期
+        const curMonth = now.getMonth() + 1;
         const timeString = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}:${now.getSeconds().toString().padStart(2, '0')}`;
         
         const display = document.getElementById('todayDisplay');
@@ -527,88 +529,115 @@ function refresh() {
         // ------------------
 
         const groups = {};
-        categories.forEach(c => groups[c] = { sum: 0, items: [] });
+categories.forEach(c => groups[c] = { sum: 0, items: [] });
+
+
+// 第一步：先建立所有項目的基礎數據，並找到「台幣現金」物件
+    let twdCashItem = null;
+    const tempProcessedItems = assets.map((a, i) => {
+        if (hiddenCategories.includes(a.category)) return null;
         
-        assets.forEach((a, i) => {
-            if (hiddenCategories.includes(a.category)) return;
-            let finalQty = a.qty;
-            let isRepaid = false;
-const currentMonth = now.getMonth() + 1; // 取得當前月份
+        let finalQty = a.qty;
+        const val = a.currency === 'USD' ? (a.price * finalQty * usdToTwd) : (a.price * finalQty);
+        
+        // 建立初始顯示物件
+        const itemObj = { ...a, displayQty: finalQty, val: val, displayVal: val, i };
 
-// 判斷是否為「本月已扣」：
-// 1. 檢查資料中是否記錄了本月已手動執行 (假設你有 a.lastRepayMonth)
-// 2. 或者：今天還沒到扣款日 (代表應該延續上個月扣完後的結果)
-let isRepaidLogic = (currentMonth === a.lastRepayMonth);
+        // 鎖定現金項目 (請確保您新增時名稱完全等於 "台幣現金")
+        if (a.symbol === '台幣現金' || a.originalSymbol === '台幣現金') {
+            twdCashItem = itemObj;
+        }
+        return itemObj;
+    }).filter(x => x !== null);
 
-if (curDay < a.repayDay && !isRepaidLogic) {
-    // 如果今天還沒到扣款日，強制視為「已扣狀態」，不重置金額
-    isRepaidLogic = true; 
-}
+    // 第二步：處理收入/支出的連動 (將錢轉移到現金項目)
+    const finalProcessedItems = tempProcessedItems.filter(item => {
+        const itemDate = item.date ? new Date(item.date) : now;
+        const isCurrentMonth = (itemDate.getMonth() + 1 === curMonth);
 
-// 套用邏輯
-if (a.qty < 0 && a.repayDay > 0 && isRepaidLogic) {
-    finalQty = a.qty + a.repayAmount;
-    if (finalQty > 0) finalQty = 0;
-    isRepaid = true;
-}
-            const val = a.currency === 'USD' ? (a.price * finalQty * usdToTwd) : (a.price * finalQty);
-            if (groups[a.category]) {
-                groups[a.category].sum += val;
-                currentTotal += val;
-                groups[a.category].items.push({...a, displayQty: finalQty, val, i, isRepaid});
+        if (item.category === '支出' || item.category === '收入') {
+            // 如果有找到現金項目，就執行連動
+            if (twdCashItem) {
+                twdCashItem.displayVal += item.val; 
             }
-        });
 
-        categories.forEach((name, idx) => {
-            const g = groups[name];
-            if (hiddenCategories.includes(name)) return; 
-            if (!isSorting && g.items.length === 0) return;
-            container.innerHTML += `
-                <div class="category-group">
-                    <div class="category-header" onclick="if(!isSorting) this.parentElement.classList.toggle('open')">
-                        <span style="font-weight:600">${name}</span>
-                        ${isSorting ? `
-                            <div>
-                                <button class="sort-btn" style="position:static" onclick="event.stopPropagation(); moveCat(${idx},-1)">↑</button>
-                                <button class="sort-btn" style="position:static" onclick="event.stopPropagation(); moveCat(${idx},1)">↓</button>
-                            </div>
-                        ` : `
-<span style="font-weight:700; color:${g.sum < 0 ? 'var(--negative)' : 'var(--primary)'}">${isHidden ? '****' : '$' + Math.round(g.sum).toLocaleString()}</span>
-                        `}
+            // 過濾非本月且非固定項目 (不顯示在列表中)
+            if (!item.isFixed && !isCurrentMonth) return false;
+        }
+        return true;
+    });
+
+    // 第三步：依照分類進行渲染
+    categories.forEach((name, idx) => {
+        const g = groups[name];
+        g.items = finalProcessedItems.filter(item => item.category === name);
+
+        if (!isSorting && g.items.length === 0) return;
+
+        g.sum = g.items.reduce((s, i) => s + i.displayVal, 0);
+        if (name !== '收入' && name !== '支出'){
+    currentTotal += g.sum;
+}
+
+    // 渲染 HTML (注意：內部的金額顯示要改用 item.displayVal)
+    container.innerHTML += `
+        <div class="category-group">
+        <div class="category-header" onclick="if(!isSorting) this.parentElement.classList.toggle('open')">
+            <span style="font-weight:600">${name}</span>
+            <div style="margin-left:auto; display:flex; align-items:center; gap:10px;">
+                ${isSorting ? `
+                    <button class="sort-btn" style="position:static" onclick="event.stopPropagation(); moveCat(${idx},-1)">↑</button>
+                    <button class="sort-btn" style="position:static" onclick="event.stopPropagation(); moveCat(${idx},1)">↓</button>
+                ` : `
+                    <span style="font-weight:700; color:${g.sum < 0 ? 'var(--negative)' : 'var(--primary)'}">
+                        ${isHidden ? '****' : '$' + Math.round(g.sum).toLocaleString()}
+                    </span>
+                `}
+            </div>
+        </div>
+        <div class="category-content">
+
+${g.items.map(item => {
+    // 自動判斷還款標籤：如果是貸款/其他分類，且本月有數值變動 (或手動有 isRepaid 標記)
+    const showRepaid = item.isRepaid || (['貸款', '其他'].includes(item.category));
+
+    return `
+    <div class="detail-item">
+        <div style="flex: 1;">
+            <div style="display:flex; align-items:center; gap:8px; margin-bottom: 4px;">
+                <b style="cursor:pointer;" onclick="const n=prompt('修改名稱', '${item.symbol}'); if(n){assets[${item.i}].symbol=n; saveAndRefresh();}">${item.symbol}</b>
+                <span style="cursor:pointer; font-size:0.65rem; color:var(--subtext); background:rgba(255,255,255,0.05); border:1px solid #444; padding:2px 6px; border-radius:4px;" 
+                      onclick="changeItemCategory(${item.i})">變更分類 ❯</span>
+            </div>
+
+            <div class="qty-badge" style="cursor:pointer; margin-bottom: 4px;" onclick="const q=prompt('修改數量/金額', '${item.qty}'); if(q!==null){assets[${item.i}].qty=Number(q); saveAndRefresh();}">
+                ${item.displayQty.toLocaleString()} ${item.category.includes('股')?'股':(item.currency==='USD'?'美元':'台幣')} ✎
+            </div>
+            
+            ${item.type === 'auto' ? `
+                <div style="display: block;">
+                    <div class="price-tag ${item.currency === 'USD' ? 'price-tag-usd' : ''}" style="display: inline-block; width: auto;">
+                        ${item.currency === 'USD' ? 'USD' : 'TWD'} ${item.price.toFixed(2)} 
+                        ${item.originalSymbol && item.originalSymbol !== item.symbol ? `(${item.originalSymbol})` : ''}
                     </div>
-                    <div class="category-content">
+                </div>` : ''}
 
-${g.items.map(item => `
-<div class="detail-item">
-    <div style="flex: 1;">
-        <div style="display:flex; align-items:center; gap:8px; margin-bottom: 4px;">
-            <b style="cursor:pointer;" onclick="const n=prompt('修改名稱', '${item.symbol}'); if(n){assets[${item.i}].symbol=n; saveAndRefresh();}">${item.symbol}</b>
-            <span style="cursor:pointer; font-size:0.65rem; color:var(--subtext); background:rgba(255,255,255,0.05); border:1px solid #444; padding:2px 6px; border-radius:4px;" 
-                  onclick="changeItemCategory(${item.i})">變更分類 ❯</span>
+            <!-- 🟢 修改後的還款標籤顯示條件 -->
+            ${showRepaid ? `
+                <div style="margin-top:4px;">
+                    <span class="price-tag" style="background:rgba(50,215,75,0.1); color:#81c784; border:none; padding:2px 8px;">本月已還款</span>
+                </div>` : ''}
         </div>
 
-        <div class="qty-badge" style="cursor:pointer; margin-bottom: 4px;" onclick="const q=prompt('修改數量/金額', '${item.qty}'); if(q!==null){assets[${item.i}].qty=Number(q); saveAndRefresh();}">
-            ${item.displayQty.toLocaleString()} ${item.category.includes('股')?'股':(item.currency==='USD'?'美元':'台幣')} ✎
+        <div style="text-align:right; display: flex; flex-direction: column; justify-content: center;">
+            <!-- 🔴 關鍵修正：這裡改用 item.displayVal 才會顯示連動後的金額 -->
+            <div style="font-weight:700; font-size: 1.1rem; color:${item.displayVal < 0 ? 'var(--negative)' : 'white'}">
+                ${isHidden ? '****' : '$' + Math.round(item.displayVal).toLocaleString()}
+            </div>
+            <span class="remove-link" style="cursor:pointer;" onclick="if(confirm('確定移除？')){assets.splice(${item.i},1); saveAndRefresh();}">移除</span>
         </div>
-        
-${item.type === 'auto' ? `
-    <div style="display: block;">
-        <div class="price-tag ${item.currency === 'USD' ? 'price-tag-usd' : ''}" style="display: inline-block; width: auto;">
-            ${item.currency === 'USD' ? 'USD' : 'TWD'} ${item.price.toFixed(2)} 
-            ${item.originalSymbol && item.originalSymbol !== item.symbol ? `(${item.originalSymbol})` : ''}
-        </div>
-    </div>` 
-: ''}
-
-        ${item.isRepaid ? `<div style="margin-top:4px;"><span class="price-tag" style="background:rgba(50,215,75,0.1); color:var(--success)">本月已還款</span></div>` : ''}
-    </div>
-
-    <div style="text-align:right; display: flex; flex-direction: column; justify-content: center;">
-<div style="font-weight:700; font-size: 1.1rem; color:${item.val < 0 ? 'var(--negative)' : 'white'}">${isHidden ? '****' : '$' + Math.round(item.val).toLocaleString()}</div>
-        <span class="remove-link" style="cursor:pointer;" onclick="if(confirm('確定移除？')){assets.splice(${item.i},1); saveAndRefresh();}">移除</span>
-    </div>
-</div>
-`).join('')}
+    </div>`;
+}).join('')}
                     </div>
                 </div>`;
         });

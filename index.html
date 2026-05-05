@@ -598,12 +598,22 @@ categories.forEach(c => groups[c] = { sum: 0, items: [] });
         <div class="category-content">
 
 ${g.items.map(item => {
-    // 自動判斷還款標籤：如果是貸款/其他分類，且本月有數值變動 (或手動有 isRepaid 標記)
-    const showRepaid = item.isRepaid || (['貸款', '其他'].includes(item.category));
+    // 取得今天的日期 (1-31)
+    const today = new Date().getDate();
+    
+    // 從資料中取得設定的還款日 (假設您存在 item.repayDay，例如 15 號)
+    // 如果資料裡沒存日期，預設為 1 號（即月初就顯示已還款）
+    const scheduledDay = item.repayDay || 1; 
+
+    // 自動判斷：分類是貸款/其他，且今天日期 >= 設定的扣款日
+    const isRepaymentCategory = ['貸款', '其他', '收入', '支出'].includes(item.category);
+    const hasReachedPayDay = today >= scheduledDay;
+    const showRepaid = isRepaymentCategory && hasReachedPayDay;
 
     return `
     <div class="detail-item">
         <div style="flex: 1;">
+
             <div style="display:flex; align-items:center; gap:8px; margin-bottom: 4px;">
                 <b style="cursor:pointer;" onclick="const n=prompt('修改名稱', '${item.symbol}'); if(n){assets[${item.i}].symbol=n; saveAndRefresh();}">${item.symbol}</b>
                 <span style="cursor:pointer; font-size:0.65rem; color:var(--subtext); background:rgba(255,255,255,0.05); border:1px solid #444; padding:2px 6px; border-radius:4px;" 
@@ -622,11 +632,19 @@ ${g.items.map(item => {
                     </div>
                 </div>` : ''}
 
-            <!-- 🟢 修改後的還款標籤顯示條件 -->
-            ${showRepaid ? `
+           ${showRepaid ? `
                 <div style="margin-top:4px;">
-                    <span class="price-tag" style="background:rgba(50,215,75,0.1); color:#81c784; border:none; padding:2px 8px;">本月已還款</span>
-                </div>` : ''}
+                    <span class="price-tag" style="background:rgba(50,215,75,0.1); color:#81c784; border:none; padding:2px 8px;">
+                        本月已還款 (扣款日: ${scheduledDay}號)
+                    </span>
+                </div>
+            ` : isRepaymentCategory ? `
+                <div style="margin-top:4px;">
+                    <span class="price-tag" style="background:rgba(255,255,255,0.05); color:#999; border:none; padding:2px 8px;">
+                        未到還款日 (預計 ${scheduledDay}號)
+                    </span>
+                </div>
+            ` : ''}
         </div>
 
         <div style="text-align:right; display: flex; flex-direction: column; justify-content: center;">
@@ -695,6 +713,9 @@ responsive: true,
         label: function(context) {
             let label = context.label || '';
             let value = context.parsed || 0;
+if (isHidden) {
+                    return ` ${label}: $****`; 
+                }
             let percent = ((value / absTotal) * 100).toFixed(1);
             return ` ${label}: $${Math.round(value).toLocaleString()} (${percent}%)`;
 }

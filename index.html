@@ -805,26 +805,35 @@ function changeItemCategory(index) {
         }
     }
 }
-    // 修改還款日期的核心邏輯
-function editRepayDay(index, currentDay) {
-    // 彈出視窗詢問新日期
-    const newDay = prompt(`修改「${assets[index].symbol}」的每月還款日 (1-31)：`, currentDay);
+function editRepayDay(i) {
+    // 1. 修改處理日期 (例如 22 號)
+    const currentDay = assets[i].repayDay || 1;
+    const newDay = prompt('【1/2】修改每月固定扣款日期 (1-31):', currentDay);
     
-    // 檢查使用者是否按下取消或輸入錯誤
-    if (newDay !== null) {
+    if (newDay !== null && newDay.trim() !== "") {
         const dayNum = parseInt(newDay);
         if (!isNaN(dayNum) && dayNum >= 1 && dayNum <= 31) {
-            // 更新資料
-            assets[index].repayDay = dayNum;
+            assets[i].repayDay = dayNum;
             
-            // 呼叫您原有的儲存並刷新函數
+            // 2. 修改您輸入的 (月固定金額)
+            // 如果您的資料還沒有 repayAmount 欄位，就先讀取 qty
+            const currentFixAmount = assets[i].repayAmount || assets[i].qty;
+            const newFixAmount = prompt('【2/2】修改每月固定扣款金額 (目前: ' + currentFixAmount + '):', currentFixAmount);
+            
+            if (newFixAmount !== null && newFixAmount.trim() !== "") {
+                const amtNum = Number(newFixAmount);
+                if (!isNaN(amtNum)) {
+                    // 🔴 關鍵點：修改的是 repayAmount，而不是總額 -3334
+                    assets[i].repayAmount = amtNum;
+                }
+            }
+            
             saveAndRefresh(); 
         } else {
-            alert("請輸入有效的日期數字 (1-31)");
+            alert('請輸入有效的日期數字 (1-31)');
         }
     }
 }
-
     // 手機版載入補強機制
     setTimeout(initCategorySelect, 500);
 

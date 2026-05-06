@@ -589,6 +589,15 @@ let needsSave = false;
         return { ...a, displayVal: val, i };
     }).filter(x => x !== null);
 
+// --- 🔴 新增：在此優先計算正確的 currentTotal (分母) ---
+    // 確保在跑渲染循環前，currentTotal 已經是排除收支後的「純資產總額」
+    currentTotal = finalProcessedItems.reduce((acc, item) => {
+        if (item.category !== '收入' && item.category !== '支出') {
+            return acc + item.displayVal;
+        }
+        return acc;
+    }, 0);
+
     // 第四步：依照分類進行渲染
     categories.forEach((name, idx) => {
         const g = groups[name];
@@ -597,9 +606,21 @@ let needsSave = false;
         if (!isSorting && g.items.length === 0) return;
 
         g.sum = g.items.reduce((s, i) => s + i.displayVal, 0);
+
+let displayPerc = "";
+        if (currentTotal > 0) {
+            // 計算佔比
+            const perc = ((g.sum / currentTotal) * 100).toFixed(1);
+
         if (name !== '收入' && name !== '支出'){
-    currentTotal += g.sum;
-}
+
+displayPerc = `<span style="font-size:0.8rem; color:var(--subtext); font-weight:400;">(${perc}%)</span>`; 
+            } else {
+                // 正常的資產項，顯示大字百分比，確保這些加總為 100%
+                displayPerc = `${perc}%`;
+            }
+        }
+
 let displayName = name;
         if (name === '收入') {
             displayName = '💰 收入'; // 您可以自行修改這裏的文字
@@ -608,15 +629,22 @@ let displayName = name;
         }
 
     // 渲染 HTML (注意：內部的金額顯示要改用 item.displayVal)
-    container.innerHTML += `
-        <div class="category-group">
+container.innerHTML += `
+    <div class="category-group">
         <div class="category-header" onclick="if(!isSorting) this.parentElement.classList.toggle('open')">
-            <span style="font-weight:600">${displayName}</span>
+            <div style="display:flex; align-items:baseline; gap:8px;">
+                <!-- 🔴 分類名稱 -->
+                <span style="font-weight:600">${displayName}</span>
+                <!-- 🔴 百分比：跟在名稱後面，縮小並變灰 -->
+                <span style="font-size:0.75rem; color:var(--subtext); font-weight:400;">${displayPerc}</span>
+            </div>
+            
             <div style="margin-left:auto; display:flex; align-items:center; gap:10px;">
                 ${isSorting ? `
                     <button class="sort-btn" style="position:static" onclick="event.stopPropagation(); moveCat(${idx},-1)">↑</button>
                     <button class="sort-btn" style="position:static" onclick="event.stopPropagation(); moveCat(${idx},1)">↓</button>
                 ` : `
+                    <!-- 🔴 右側金額：保持原本的大字體 -->
                     <span style="font-weight:700; color:${g.sum < 0 ? 'var(--negative)' : 'var(--primary)'}">
                         ${isHidden ? '****' : '$' + Math.round(g.sum).toLocaleString()}
                     </span>

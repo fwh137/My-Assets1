@@ -550,24 +550,46 @@ categories.forEach(c => groups[c] = { sum: 0, items: [] });
         return itemObj;
     }).filter(x => x !== null);
 
-    // 第二步：處理收入/支出的連動 (將錢轉移到現金項目)
-    const finalProcessedItems = tempProcessedItems.filter(item => {
+// 第二步：處理收入/支出的連動 (直接修改原始數據 assets)
+let needsSave = false;
+    assets.forEach((item, idx) => {
         const itemDate = item.date ? new Date(item.date) : now;
         const isCurrentMonth = (itemDate.getMonth() + 1 === curMonth);
 
-        if (item.category === '支出' || item.category === '收入') {
-            // 如果有找到現金項目，就執行連動
+        // 如果是本月的 收入/支出，且還沒被結算過 (!item.isProcessed)
+        if ((item.category === '支出' || item.category === '收入') && isCurrentMonth && !item.isProcessed) {
             if (twdCashItem) {
-                twdCashItem.displayVal += item.val; 
+                const val = item.currency === 'USD' ? (item.price * item.qty * usdToTwd) : (item.price * item.qty);
+                
+                // 🔴 核心改動：直接修改 assets 陣列裡的台幣現金數量
+                assets[twdCashItem.i].qty += val;
+                
+                // 標記這筆收支已處理，避免無限循環計算
+                assets[idx].isProcessed = true;
+                needsSave = true;
             }
-
-            // 過濾非本月且非固定項目 (不顯示在列表中)
-            if (!item.isFixed && !isCurrentMonth) return false;
         }
-        return true;
     });
 
-    // 第三步：依照分類進行渲染
+    // 如果數據有變動，存檔並跳出，讓 saveAndRefresh 重新觸發一次乾淨的 refresh
+    if (needsSave) {
+        saveAndRefresh();
+        return; 
+    }
+// --- 第三步：🔴 準備渲染資料 (修復 finalProcessedItems 未定義報錯) ---
+    const finalProcessedItems = assets.map((a, i) => {
+        if (hiddenCategories.includes(a.category)) return null;
+        
+        const val = a.currency === 'USD' ? (a.price * a.qty * usdToTwd) : (a.price * a.qty);
+        
+        // 🔴 過濾邏輯：收支項目若非本月則不顯示，保持介面乾淨
+        const itemDate = a.date ? new Date(a.date) : now;
+        if ((a.category === '支出' || a.category === '收入') && (itemDate.getMonth() + 1 !== curMonth)) return null;
+
+        return { ...a, displayVal: val, i };
+    }).filter(x => x !== null);
+
+    // 第四步：依照分類進行渲染
     categories.forEach((name, idx) => {
         const g = groups[name];
         g.items = finalProcessedItems.filter(item => item.category === name);
@@ -578,12 +600,18 @@ categories.forEach(c => groups[c] = { sum: 0, items: [] });
         if (name !== '收入' && name !== '支出'){
     currentTotal += g.sum;
 }
+let displayName = name;
+        if (name === '收入') {
+            displayName = '💰 收入'; // 您可以自行修改這裏的文字
+        } else if (name === '支出') {
+            displayName = '💸 支出'; // 也可以順便改支出
+        }
 
     // 渲染 HTML (注意：內部的金額顯示要改用 item.displayVal)
     container.innerHTML += `
         <div class="category-group">
         <div class="category-header" onclick="if(!isSorting) this.parentElement.classList.toggle('open')">
-            <span style="font-weight:600">${name}</span>
+            <span style="font-weight:600">${displayName}</span>
             <div style="margin-left:auto; display:flex; align-items:center; gap:10px;">
                 ${isSorting ? `
                     <button class="sort-btn" style="position:static" onclick="event.stopPropagation(); moveCat(${idx},-1)">↑</button>
@@ -600,15 +628,24 @@ categories.forEach(c => groups[c] = { sum: 0, items: [] });
 ${g.items.map(item => {
     // 取得今天的日期 (1-31)
     const today = new Date().getDate();
-    
-    // 從資料中取得設定的還款日 (假設您存在 item.repayDay，例如 15 號)
-    // 如果資料裡沒存日期，預設為 1 號（即月初就顯示已還款）
-    const scheduledDay = item.repayDay || 1; 
+    const itemIdx = item.i;
+
+    // 只有當 item 有設定 repayDay 且不為 0 時，才啟用還款標籤邏輯
+    const hasRepaySetting = !!(item.repayDay && item.repayDay !== 0);
+    // 重新定義顯示日期，避免 template 找不到變數
+    const displayDay = item.repayDay;
 
     // 自動判斷：分類是貸款/其他，且今天日期 >= 設定的扣款日
-    const isRepaymentCategory = ['貸款', '其他', '收入', '支出'].includes(item.category);
-    const hasReachedPayDay = today >= scheduledDay;
-    const showRepaid = isRepaymentCategory && hasReachedPayDay;
+    const isTargetCat = ['貸款', '其他', '收入', '支出'].includes(item.category);
+
+    const showRepaid = hasRepaySetting && isTargetCat && today >= item.repayDay;
+    const showPending = hasRepaySetting && isTargetCat && today < item.repayDay;
+
+// 判斷是否為收入項目，用來切換文字
+const isIncomeItem = item.category === '收入';
+// 取得要顯示的固定金額 (1667)，若無則顯示 item.qty
+const fixAmt = (item.repayAmount || item.qty || 0).toLocaleString();
+const finalDay = item.repayDay || 0;
 
     return `
     <div class="detail-item">
@@ -620,9 +657,10 @@ ${g.items.map(item => {
                       onclick="changeItemCategory(${item.i})">變更分類 ❯</span>
             </div>
 
-            <div class="qty-badge" style="cursor:pointer; margin-bottom: 4px;" onclick="const q=prompt('修改數量/金額', '${item.qty}'); if(q!==null){assets[${item.i}].qty=Number(q); saveAndRefresh();}">
-                ${item.displayQty.toLocaleString()} ${item.category.includes('股')?'股':(item.currency==='USD'?'美元':'台幣')} ✎
-            </div>
+            <div class="qty-badge" style="cursor:pointer; margin-bottom: 4px;" onclick="const q=prompt('修改數量/金額', '${item.qty}'); if(q!==null){assets[${itemIdx}].qty=Number(q); saveAndRefresh();}">
+
+    ${Math.round(item.qty || 0).toLocaleString()} ${item.category.includes('股')?'股':(item.currency==='USD'?'美元':'台幣')} ✎
+</div>
             
             ${item.type === 'auto' ? `
                 <div style="display: block;">
@@ -632,30 +670,30 @@ ${g.items.map(item => {
                     </div>
                 </div>` : ''}
 
-           ${showRepaid ? `
+                ${showRepaid ? `
                 <div style="margin-top:4px;">
-                    <span class="price-tag" onclick="editRepayDay(${item.i})" style="background:rgba(50,215,75,0.1); color:#81c784; border:none; padding:2px 8px; cursor:pointer;">
-                        本月已還款 (扣款日: (${scheduledDay}號) ✎
+                    <span class="price-tag" onclick="editRepayDay(${itemIdx})" style="background:rgba(50,215,75,0.1); color:#81c784; border:none; padding:2px 8px; cursor:pointer;">
+                        ${isIncomeItem ? '✅ 本月已入帳' : '✅ 本月已還款'} (入帳日: ${finalDay}號) ✎
                     </span>
                 </div>
-            ` : isRepaymentCategory ? `
+            ` : showPending ? `
                 <div style="margin-top:4px;">
-                    <span class="price-tag" onclick="editRepayDay(${item.i})" style="background:rgba(255,255,255,0.05); color:#999; border:none; padding:2px 8px; cursor:pointer;">
-                        未到還款日 (預計 ${scheduledDay}號) ✎
+                    <span class="price-tag" onclick="editRepayDay(${itemIdx})" style="background:rgba(255,255,255,0.05); color:#999; border:none; padding:2px 8px; cursor:pointer;">
+                        ${isIncomeItem ? '⏳ 預計入帳' : '⏳ 未到還款日'} (入帳日: ${finalDay}號) ✎
                     </span>
                 </div>
             ` : ''}
         </div>
 
         <div style="text-align:right; display: flex; flex-direction: column; justify-content: center;">
-            <!-- 🔴 關鍵修正：這裡改用 item.displayVal 才會顯示連動後的金額 -->
             <div style="font-weight:700; font-size: 1.1rem; color:${item.displayVal < 0 ? 'var(--negative)' : 'white'}">
-                ${isHidden ? '****' : '$' + Math.round(item.displayVal).toLocaleString()}
+                ${isHidden ? '****' : '$' + Math.round(item.displayVal || 0).toLocaleString()}
             </div>
-            <span class="remove-link" style="cursor:pointer;" onclick="if(confirm('確定移除？')){assets.splice(${item.i},1); saveAndRefresh();}">移除</span>
+            <span class="remove-link" style="cursor:pointer;" onclick="if(confirm('確定移除？')){assets.splice(${itemIdx},1); saveAndRefresh();}">移除</span>
         </div>
     </div>`;
 }).join('')}
+
                     </div>
                 </div>`;
         });

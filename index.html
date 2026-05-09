@@ -234,7 +234,13 @@ input:not([type="checkbox"]), select {
 
         <div id="canvas-holder"><canvas id="assetChart"></canvas></div>
         <div id="todayDisplay" style="color: var(--subtext); font-size: 0.75rem; margin-top:10px;"></div>
-        <button class="sync-btn" id="syncBtn" onclick="syncAllPrices()">🔄 更新現有項目股價</button>
+<div style="display: flex; gap: 10px; margin-top: 15px;">
+    <button class="sync-btn" onclick="updatePrices('TWD')" style="flex: 1; margin-top: 0;">
+         🔄 更新現有.🇹🇼 股價
+    </button>
+<button class="sync-btn" onclick="updatePrices('USD')" style="flex: 1; margin-top: 0;">🔄 更新現有.🇺🇸 股價
+    </button>
+</div>
         <div class="legend-card" id="chartLegend"></div>
     </div>
 
@@ -336,24 +342,45 @@ const text = isHidden ? '$***,***' : '$' + Math.round(currentTotal).toLocaleStri
         } catch (e) { return null; }
     }
 
-    async function syncAllPrices() {
-        const btn = document.getElementById('syncBtn');
-        btn.disabled = true; btn.innerText = "⏳ 同步中...";
-        try {
-            const res = await fetch('https://open.er-api.com/v6/latest/USD');
-            const d = await res.json(); usdToTwd = d.rates.TWD;
-        } catch(e) {}
-        for (let i = 0; i < assets.length; i++) {
-            if (assets[i].type === 'auto') {
-// 優先使用 originalSymbol，如果沒有(舊資料)則用 symbol
-        const queryTarget = assets[i].originalSymbol || assets[i].symbol;
-        const latestPrice = await getPrice(queryTarget);
-        if (latestPrice) assets[i].price = latestPrice;
+// 🔴 修改：加入 targetCurrency 參數，接收來自按鈕的 'TWD' 或 'USD'
+async function updatePrices(targetCurrency) {
+    // 🔴 確保獲取當前點擊的按鈕（這行非常重要，否則會報 btn is not defined）
+    const btn = event.currentTarget;
+    const originalText = btn.innerText;
+    
+    btn.disabled = true; 
+    btn.innerText = "⏳ 同步中...";
+
+    try {
+        // 更新匯率 (保持原樣)
+        const res = await fetch('https://open.er-api.com/v6/latest/USD');
+        const d = await res.json(); 
+        usdToTwd = d.rates.TWD;
+    } catch(e) { 
+        console.log("匯率更新失敗"); 
     }
+
+    // 🔴 迴圈更新價格
+    for (let i = 0; i < assets.length; i++) {
+        // 必須同時滿足「自動更新」且「幣別相符」才抓取
+        if (assets[i].type === 'auto' && assets[i].currency === targetCurrency) {
+            const queryTarget = assets[i].originalSymbol || assets[i].symbol;
+
+            const latestPrice = await getPrice(queryTarget);
+            if (latestPrice) {
+                assets[i].price = latestPrice;
+            }
+        }
+    } // <--- 🔴 這是 for 迴圈的結束
+
+    // 🔴 以下動作在迴圈結束後只會執行一次
+    saveAndRefresh(); 
+    btn.disabled = false; 
+    btn.innerText = originalText; // 恢復原本按鈕文字
+    
+    alert(`${targetCurrency === 'TWD' ? '台股' : '美股'}數據更新完成！`);
 }
-        saveAndRefresh();
-        btn.disabled = false; btn.innerText = "🔄 更新現有項目股價";
-    }
+    
 
 async function handleNewItem() {
     const code = document.getElementById('code').value.trim();

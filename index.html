@@ -760,16 +760,49 @@ const finalDay = item.repayDay || 0;
         const legend = document.getElementById('chartLegend'); legend.innerHTML = '';
         if (chart) chart.destroy();
         const labels = [], data = [], bg = [];
-        let absTotal = 0; categories.forEach(c => absTotal += Math.abs(groups[c].sum));
+
+        let assetOnlyTotal = 0; 
+        categories.forEach(c => {
+            if (c !== '收入' && c !== '支出') {
+                assetOnlyTotal += Math.abs(groups[c].sum);
+            }
+        });
 
         categories.forEach((cat, i) => {
             if (groups[cat].sum !== 0) {
                 const val = Math.abs(groups[cat].sum);
                 const color = COLORS[i % COLORS.length];
-                labels.push(cat); data.push(val); bg.push(color);
-                legend.innerHTML += `<div class="legend-item"><div style="display:flex; align-items:center"><div class="color-dot" style="background:${color}"></div>${cat}</div><div>${absTotal?((val/absTotal)*100).toFixed(1):0}%</div></div>`;
+
+                // 只有資產項目進入圓餅圖資料集
+                if (cat !== '收入' && cat !== '支出') {
+                    labels.push(cat); 
+                    data.push(val); 
+                    bg.push(color);
+                }
+
+let displayPerc = "";
+                if (assetOnlyTotal > 0) {
+                    const p = ((val / assetOnlyTotal) * 100).toFixed(1);
+                    if (cat === '收入' || cat === '支出') {
+                        // 收支項目：顯示佔總資產的比例 (例如 2.0%)
+                        displayPerc = `${p}%`; 
+                    } else {
+                        // 一般資產：原本的占比 (加總會是 100%)
+                        displayPerc = `${p}%`;
+                    }
+                }
+
+                legend.innerHTML += `
+                    <div class="legend-item">
+                        <div style="display:flex; align-items:center">
+                            <div class="color-dot" style="background:${color}"></div>
+                            ${cat}
+                        </div>
+                        <div>${displayPerc}</div>
+                    </div>`;
             }
         });
+
         chart = new Chart(ctx, {
 type: 'doughnut',
     data: { 

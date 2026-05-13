@@ -773,23 +773,21 @@ const finalDay = item.repayDay || 0;
                 const val = Math.abs(groups[cat].sum);
                 const color = COLORS[i % COLORS.length];
 
-                // 只有資產項目進入圓餅圖資料集
+                // --- 🔵 修改處 2：過濾圓餅圖顯示 ---
+                // 只有「非收支」項目會被 push 進 data，確保圓餅圖加總永遠是 100% 資產
                 if (cat !== '收入' && cat !== '支出') {
                     labels.push(cat); 
                     data.push(val); 
                     bg.push(color);
                 }
 
-let displayPerc = "";
+                // --- 🔵 修改處 3：百分比顯示邏輯 ---
+                let displayPerc = "";
                 if (assetOnlyTotal > 0) {
+                    // 不管是資產還是收支，統一除以「純資產總額」
+                    // 這樣「收支」就會顯示它相對於你總資產的占比（例如 2%）
                     const p = ((val / assetOnlyTotal) * 100).toFixed(1);
-                    if (cat === '收入' || cat === '支出') {
-                        // 收支項目：顯示佔總資產的比例 (例如 2.0%)
-                        displayPerc = `${p}%`; 
-                    } else {
-                        // 一般資產：原本的占比 (加總會是 100%)
-                        displayPerc = `${p}%`;
-                    }
+                    displayPerc = `${p}%`;
                 }
 
                 legend.innerHTML += `
@@ -798,7 +796,9 @@ let displayPerc = "";
                             <div class="color-dot" style="background:${color}"></div>
                             ${cat}
                         </div>
-                        <div>${displayPerc}</div>
+                        <div style="${(cat === '收入' || cat === '支出') ? 'color: var(--subtext);' : ''}">
+                            ${displayPerc}
+                        </div>
                     </div>`;
             }
         });
@@ -842,16 +842,18 @@ responsive: true,
 if (isHidden) {
                     return ` ${label}: $****`; 
                 }
-            let percent = ((value / absTotal) * 100).toFixed(1);
+            let percent = ((value / assetOnlyTotal) * 100).toFixed(1);
             return ` ${label}: $${Math.round(value).toLocaleString()} (${percent}%)`;
 }
-                }
-            } // 這裡結束 tooltip
-        } // 這裡結束 plugins
-    } // 這裡結束 options
-}); // 🔴 重要：這裡結束 new Chart(...)
-
-} // 🔴 重要：這裡結束整個 updateChart 函數
+                        }
+                    }
+                },
+                // 🔴 確保互動模式正確
+                hover: { mode: 'nearest', intersect: true },
+                animation: { duration: 400 }
+            }
+        });
+    }
 
     // 啟動初始化
 window.onload = async () => {

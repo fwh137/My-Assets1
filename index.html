@@ -577,32 +577,46 @@ categories.forEach(c => groups[c] = { sum: 0, items: [] });
         return itemObj;
     }).filter(x => x !== null);
 
-// 第二步：處理收入/支出的連動 (直接修改原始數據 assets)
+// 第二步：處理收入/支出的連動 (每到設定日期，自動入帳/扣款至台幣現金)
 let needsSave = false;
-    assets.forEach((item, idx) => {
-        const itemDate = item.date ? new Date(item.date) : now;
-        const isCurrentMonth = (itemDate.getMonth() + 1 === curMonth);
+const currentYearMonth = `${now.getFullYear()}-${curMonth}`; // 建立今年當月的標籤，例如 "2026-5"
 
-        // 如果是本月的 收入/支出，且還沒被結算過 (!item.isProcessed)
-        if ((item.category === '支出' || item.category === '收入') && isCurrentMonth && !item.isProcessed) {
+assets.forEach((item, idx) => {
+    // 檢查這是不是有設定「還款日/入帳日」的收入或支出項目
+    if ((item.category === '支出' || item.category === '收入') && item.repayDay && item.repayDay !== 0) {
+        
+        // 條件 1：今天的日期已經大於或等於設定的入帳日
+        const isTimeUp = (curDay >= item.repayDay);
+        
+        // 條件 2：這個月這個項目還沒有被執行過入帳
+        const notProcessedThisMonth = (item.lastProcessedMonth !== currentYearMonth);
+
+        if (isTimeUp && notProcessedThisMonth) {
             if (twdCashItem) {
-                const val = item.currency === 'USD' ? (item.price * item.qty * usdToTwd) : (item.price * item.qty);
+                // 取得要變動的金額：優先使用修改過的固定扣款金額 repayAmount，若無則使用 qty
+                const baseAmount = item.repayAmount || item.qty || 0;
+                const val = item.currency === 'USD' ? (item.price * baseAmount * usdToTwd) : (item.price * baseAmount);
                 
-                // 🔴 核心改動：直接修改 assets 陣列裡的台幣現金數量
+                // 執行變動（支出項目在輸入時若為負數，這裡加算 val 就會自然變成扣款）
                 assets[twdCashItem.i].qty += val;
                 
-                // 標記這筆收支已處理，避免無限循環計算
-                assets[idx].isProcessed = true;
+                // 🔴 關鍵核心：標記「今年當月」已處理，這樣這個月內就算天天打開網頁，也絕不會重複扣款/入帳
+                assets[idx].lastProcessedMonth = currentYearMonth;
+                assets[idx].isProcessed = true; // 相容舊版標記
                 needsSave = true;
+                
+                console.log(`[自動入帳成功] 項目: ${item.symbol}, 金額: ${val}, 已計入台幣現金。`);
             }
         }
-    });
-
-    // 如果數據有變動，存檔並跳出，讓 saveAndRefresh 重新觸發一次乾淨的 refresh
-    if (needsSave) {
-        saveAndRefresh();
-        return; 
     }
+});
+
+// 如果數據有變動，存檔並跳出，讓 saveAndRefresh 重新觸發一次乾淨的 refresh
+if (needsSave) {
+    saveAndRefresh();
+    return; 
+}
+
 // --- 第三步：🔴 準備渲染資料 (修復 finalProcessedItems 未定義報錯) ---
     const finalProcessedItems = assets.map((a, i) => {
         if (hiddenCategories.includes(a.category)) return null;

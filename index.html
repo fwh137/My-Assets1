@@ -452,8 +452,19 @@ if (code === "開啟") {
     if (isRepay) {
         item.repayDay = Number(document.getElementById('repayDay').value) || 0;
         item.repayAmount = Number(document.getElementById('repayAmount').value) || 0;
+} else {
+        // 🟢 修正：如果沒有勾選「每月固定」，代表這是你當下「手動新增的單筆收支」
+        if (cat === '支出' || cat === '收入') {
+            // 在你的資產內，尋找名稱叫「台幣現金」的項目
+            let cashAccount = assets.find(a => a.symbol === '台幣現金' || a.originalSymbol === '台幣現金');
+            if (cashAccount) {
+                // 🟢 配合你的習慣：因為你手動輸入負數（例如 -500），加上負數（+=）就會自動變成扣除
+                cashAccount.qty += qty; 
+                console.log(`[手動單筆連動] 已從台幣現金變動金額: ${qty}`);
+           }
+        }
     }
-    
+
     assets.push(item);
     saveAndRefresh();
 

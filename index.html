@@ -634,9 +634,17 @@ if (needsSave) {
         
         const val = a.currency === 'USD' ? (a.price * a.qty * usdToTwd) : (a.price * a.qty);
         
-        // 🔴 過濾邏輯：收支項目若非本月則不顯示，保持介面乾淨
+        // 🟢 修正後的過濾邏輯：
+        // 只有在「同時是收支項目」且「沒有設定固定扣款/入帳日」且「不是本月建立」的情況下，才予以隱藏。
+        // 有設定 repayDay 的固定項目在新月份會被安全保留。
         const itemDate = a.date ? new Date(a.date) : now;
-        if ((a.category === '支出' || a.category === '收入') && (itemDate.getMonth() + 1 !== curMonth)) return null;
+        const isIncomeOrExpense = (a.category === '支出' || a.category === '收入');
+        const isFixedItem = (a.repayDay && a.repayDay !== 0);
+        const isNotCurrentMonth = (itemDate.getMonth() + 1 !== curMonth);
+
+        if (isIncomeOrExpense && !isFixedItem && isNotCurrentMonth) {
+            return null;
+        }
 
         return { ...a, displayVal: val, i };
     }).filter(x => x !== null);

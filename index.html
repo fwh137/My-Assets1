@@ -28,9 +28,9 @@
     background: rgba(255, 255, 255, 0.1); /* 半透明玻璃質感 */
     color: var(--text);
     border: 1px solid rgba(255, 255, 255, 0.2); /* 纖細的邊框 */
-    display: flex;          /* 🔴 新增：開啟彈性佈局 */
-    align-items: center;    /* 🔴 新增：垂直置中 */
-    justify-content: center;/* 🔴 新增：水平置中 */
+    display: flex;          /* 開啟彈性佈局 */
+    align-items: center;    /* 垂直置中 */
+    justify-content: center;/* 水平置中 */
     padding: 6px 14px;
     border-radius: 10px;
     font-size: 0.8rem;
@@ -130,7 +130,7 @@ input:not([type="checkbox"]), select {
 
 /* 點擊時的視覺回饋：稍微放大 + 變亮 */
 .num-key:active {
-    transform: scale(1.2) !important; /* 🔴 關鍵：放大 1.2 倍 */
+    transform: scale(1.2) !important; /* 關鍵：放大 1.2 倍 */
     background-color: rgba(255, 255, 255, 0.4) !important; /* 變亮 */
     box-shadow: 0 0 15px rgba(255, 255, 255, 0.2); /* 增加一點點光暈感 */
     transition: transform 0.02s ease-out !important; /* 點下去要快，回彈稍微慢一點 */
@@ -154,7 +154,7 @@ input:not([type="checkbox"]), select {
     100% { transform: scale(1); }
 }
 
-/* --- 🔴 強制修正：讓 Checkbox 變身 iOS 滑塊 --- */
+/* --- 讓 Checkbox 變身 iOS 滑塊 --- */
 .check-row {
     display: flex !important;
     align-items: center !important;
@@ -212,7 +212,7 @@ input:not([type="checkbox"]), select {
     font-size: 0.95rem;
 }
 
-/* 🔴 新增：美股（USD）專用的藍色標籤樣式 */
+/* 美股（USD）專用的藍色標籤樣式 */
 .price-tag-usd {
     /* 調整為更像圖片中的暗藍色背景 */
     background: rgba(10, 132, 255, 0.2) !important; 
@@ -226,9 +226,16 @@ input:not([type="checkbox"]), select {
 <body>
 
 <div class="container">
+
+<!-- 分頁切換按鈕 (Segmented Control) -->
+<div style="display: flex; background: #1c1c1e; padding: 4px; border-radius: 12px; margin-bottom: 15px; border: 1px solid #333;">
+    <button id="tab-overview" onclick="switchPage('overview')" style="flex: 1; padding: 10px; border: none; border-radius: 8px; background: var(--accent); color: white; font-weight: 600; cursor: pointer;">資產總覽</button>
+    <button id="tab-history" onclick="switchPage('history')" style="flex: 1; padding: 10px; border: none; border-radius: 8px; background: transparent; color: var(--subtext); font-weight: 600; cursor: pointer;">資產趨勢</button>
+</div>
+
     <div id="status" style="font-size:0.75rem; text-align:center; color:var(--subtext); margin-bottom:10px;">準備就緒</div>
     
-    <div class="chart-box">
+    <div class="chart-box"id="page-overview">
         <button class="eye-btn" id="hideBtn" style="left: 15px;" onclick="toggleHide()">🙈</button>
 <button class="sort-btn" onclick="toggleSortMode()">⇅ 排序</button>
 
@@ -248,8 +255,8 @@ input:not([type="checkbox"]), select {
 
     <div class="input-area">
         <h3>新增項目</h3>
-        <input type="text" id="code" placeholder="代碼 (例: 2330) 或 名稱">
-        <input type="number" id="qty" placeholder="持有數量/金額 (貸款請輸入負數)">
+        <input type="text" id="code" placeholder="代碼 (例: 2330) or 名稱">
+        <input type="number" id="qty" placeholder="持有數量/金額 (貸款扣款請輸入負數)">
         
         <select id="categorySelect">
             <option value="" disabled selected>載入中...</option>
@@ -262,19 +269,172 @@ input:not([type="checkbox"]), select {
 
         <label class="check-row">
             <input type="checkbox" id="enableRepay" onchange="document.getElementById('debtFields').style.display = this.checked ? 'block' : 'none'"> 
-            每月固定支出/還款 (自動扣款)
+            每月自動扣款 / 定期定額 / 還款
         </label>
 
 <div id="debtFields" style="display:none; padding: 10px; background: rgba(255,255,255,0.05); border-radius: 14px; margin-top: 5px; margin-bottom: 5px;">
-    <input type="number" id="repayDay" placeholder="還款日(1-31)">
-    <input type="number" id="repayAmount" placeholder="還款金額">
+    <input type="number" id="repayDay" placeholder="入帳日(1-31)">
+    <input type="number" id="repayAmount" placeholder="固定金額">
+    <input type="number" id="interestRate" placeholder="貸款年利率 (%) 例如: 4.1" step="0.01">
+    <input type="number" id="totalPeriods" placeholder="貸款總期數 例如: 84">
+    <input type="number" id="paidPeriods" placeholder="目前已還期數 例如: 14">
 </div>
         
         <button class="btn-primary" onclick="handleNewItem()">確認加入並同步</button>
+
     </div>
+<!-- 🟢第二頁（資產歷史頁面） -->
+    <div id="page-history" style="display: none;">
+        <div class="chart-box">
+            <h3 style="margin-top: 0; font-size: 1.1rem; text-align: left; color: var(--text);">近 30 天資產曲線</h3>
+            <div style="position: relative; width: 100%; height: 300px; margin-top: 15px;">
+                <canvas id="assetHistoryChart"></canvas>
+            </div>
+        </div>
+    </div>
+
 </div>
 
 <script>
+// 1. 全域變數
+let historyChart = null;
+let rawHistoryData = []; // 儲存後端抓回來的原始歷史數據
+
+// 2. 頁面切換邏輯
+function switchPage(page) {
+    const overviewPage = id => document.getElementById(id);
+    const tabOverview = overviewPage('tab-overview');
+    const tabHistory = overviewPage('tab-history');
+    
+    // 取得主要區塊
+    const pageOverview = overviewPage('page-overview');
+    const pageHistory = overviewPage('page-history');
+    const categoryList = overviewPage('categoryList');
+    const inputArea = document.querySelector('.input-area');
+
+    if (page === 'overview') {
+        pageOverview.style.display = 'block';
+        categoryList.style.display = 'block';
+        inputArea.style.display = 'block';
+        pageHistory.style.display = 'none';
+
+        tabOverview.style.background = 'var(--accent)';
+        tabOverview.style.color = 'white';
+        tabHistory.style.background = 'transparent';
+        tabHistory.style.color = 'var(--subtext)';
+    } else {
+        pageOverview.style.display = 'none';
+        categoryList.style.display = 'none';
+        inputArea.style.display = 'none';
+        pageHistory.style.display = 'block';
+
+        tabHistory.style.background = 'var(--accent)';
+        tabHistory.style.color = 'white';
+        tabOverview.style.background = 'transparent';
+        tabOverview.style.color = 'var(--subtext)';
+
+        // 切換至歷史頁面時讀取數據並繪製圖表
+        loadAssetHistory();
+    }
+}
+
+// 3. 向 GAS 讀取完整歷史數據
+async function loadAssetHistory() {
+    try {
+        const res = await fetch(`${YOUR_SCRIPT_URL}?action=getHistory&t=${Date.now()}`, {
+            method: 'GET',
+            redirect: 'follow'
+        });
+        
+        if (!res.ok) throw new Error(`HTTP Error: ${res.status}`);
+        rawHistoryData = await res.json();
+
+        if (!Array.isArray(rawHistoryData) || rawHistoryData.length === 0) return;
+
+        // 讀取成功後，執行即時繪圖
+        renderHistoryChart();
+    } catch (err) {
+        console.error("載入歷史資產圖表失敗:", err);
+    }
+}
+
+// 4. 根據前端目前的隱藏狀態即時計算並繪製折線圖
+function renderHistoryChart() {
+    if (!rawHistoryData || rawHistoryData.length === 0) return;
+
+    const ctx = document.getElementById('assetHistoryChart').getContext('2d');
+
+    // 處理 X 軸日期標籤 (顯示 MM/DD)
+    const labels = rawHistoryData.map(item => {
+        const parts = item.date.split('-');
+        return parts.length === 3 ? `${parts[1]}/${parts[2]}` : item.date;
+    });
+
+    // 前端即時扣除：加總非「收入、支出」且未被 hiddenCategories 隱藏的類別
+    const dataValues = rawHistoryData.map(item => {
+        let dayTotal = 0;
+        const details = item.details || {};
+
+        for (const [catName, val] of Object.entries(details)) {
+            // 預設排除收入與支出
+            if (catName === "收入" || catName === "支出") continue;
+
+            // 判斷該類別是否在前端隱藏清單中
+            if (typeof hiddenCategories !== 'undefined' && hiddenCategories.includes(catName)) {
+                continue;
+            }
+
+            dayTotal += val;
+        }
+        return dayTotal;
+    });
+
+    // 銷毀舊圖表實例
+    if (historyChart) historyChart.destroy();
+
+    // 繪製新圖表
+    historyChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: '歷史資產',
+                data: dataValues,
+                borderColor: '#0a84ff',
+                backgroundColor: 'rgba(10, 132, 255, 0.15)',
+                borderWidth: 2,
+                fill: true,
+                tension: 0.3,
+                pointRadius: 4,
+                pointBackgroundColor: '#0a84ff',
+                pointHoverRadius: 6
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    callbacks: {
+                        label: (ctx) => isHidden ? ' $****' : ` $${Math.round(ctx.parsed.y).toLocaleString()}`
+                    }
+                }
+            },
+            scales: {
+                x: { 
+                    grid: { color: 'rgba(255, 255, 255, 0.05)' }, 
+                    ticks: { color: '#8e8e93', font: { size: 10 } } 
+                },
+                y: { 
+                    grid: { color: 'rgba(255, 255, 255, 0.05)' }, 
+                    ticks: { color: '#8e8e93', font: { size: 10 } } 
+                }
+            }
+        }
+    });
+}
+
 let currentInputPwd = "";
 let pendingCat = ""; 
 let pwdMode = ""; // 紀錄模式：'unlockEye' 或 'unhideCat'
@@ -282,13 +442,13 @@ const SET_PASSWORD = "5257";    // 眼睛切換密碼
 const UNHIDE_PASSWORD = "5757"; // 開啟隱藏分類密碼
 
     // 你的 Google Apps Script URL
-    const YOUR_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbymGrkXe24-JaWEvT6lYMQBaBsyYTy5_lAiDfIxAORQ_yYqoCfYxgRLgXCjR0BETyqC/exec";
+    const YOUR_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzYZxjsem3czmupxLxylHOnA53EBXeTY9lEkWWPSzw_xO6rNVKmAPV9WmJ7eENWQ6xy/exec";
     
 // 1. 先讀取舊有的排序
 let savedCats = JSON.parse(localStorage.getItem('percento_cat_order')) || [];
 
 // 2. 定義「一定要有」的標準分類
-const defaultCats = ["台幣活存", "台幣現金", "台股", "存股", "美股", "美元活存", "投資", "貸款", "其他", "收入", "支出"];
+const defaultCats = ["台幣活存", "台幣現金", "台股", "存股", "美股", "美元活存", "投資", "定期定額", "貸款", "其他", "收入", "支出"];
 
 // 3. 合併：保留舊排序，並補上清單中「缺少的」預設分類
 let categories = [...savedCats];
@@ -304,7 +464,7 @@ let isVerified = false;
 // 紀錄哪些分類被手動隱藏了
 let hiddenCategories = JSON.parse(localStorage.getItem('percento_hidden_cats')) || [];
 
-    const COLORS = ['#0a84ff','#64d2ff','#ff9f0a','#30d158','#bf5af2','#5e5ce6','#64d2ff','#ff453a','#5856d6','#0a84ff','#ff453a'];
+    const COLORS = ['#0a84ff','#64d2ff','#ff9f0a','#30d158','#bf5af2','#5e5ce6','#ac8e68','#fff176','#ff453a','#5856d6','#64d2ff','#ff453a'];
     let usdToTwd = 32.5, chart, currentTotal = 0, isSorting = false;
 
     // 圓環中心文字插件
@@ -334,7 +494,12 @@ const text = isHidden ? '$***,***' : '$' + Math.round(currentTotal).toLocaleStri
     }
 
     async function getPrice(symbol) {
-        const clean = symbol.toUpperCase().replace(".TW", "").trim();
+        let clean = symbol.toUpperCase().trim();
+    // Google 財經不吃 .TW，強制鎖定台股的正確寫法是「TPE:」字首！
+    // 只要開頭是數字，且還沒有設定過交易所字首的，一律在前面加上 "TPE:"
+    if (/^\d/.test(clean) && !clean.includes(':')) {
+        clean = 'TPE:' + clean;
+    }
         try {
             const res = await fetch(`${YOUR_SCRIPT_URL}?symbol=${encodeURIComponent(clean)}&t=${Date.now()}`);
             const data = await res.json();
@@ -342,9 +507,9 @@ const text = isHidden ? '$***,***' : '$' + Math.round(currentTotal).toLocaleStri
         } catch (e) { return null; }
     }
 
-// 🔴 修改：加入 targetCurrency 參數，接收來自按鈕的 'TWD' 或 'USD'
+// 加入 targetCurrency 參數，接收來自按鈕的 'TWD' 或 'USD'
 async function updatePrices(targetCurrency) {
-    // 🔴 確保獲取當前點擊的按鈕（這行非常重要，否則會報 btn is not defined）
+    // 確保獲取當前點擊的按鈕（這行非常重要，否則會報 btn is not defined）
     const btn = event.currentTarget;
     const originalText = btn.innerText;
     
@@ -360,9 +525,10 @@ async function updatePrices(targetCurrency) {
         console.log("匯率更新失敗"); 
     }
 
-    // 🔴 迴圈更新價格
+    // 迴圈更新價格
     for (let i = 0; i < assets.length; i++) {
         // 必須同時滿足「自動更新」且「幣別相符」才抓取
+        // 分類如果是「定期定額」，就跳過不自動刷股票公式，防止重複計算入帳
         if (assets[i].type === 'auto' && assets[i].currency === targetCurrency) {
             const queryTarget = assets[i].originalSymbol || assets[i].symbol;
 
@@ -371,9 +537,9 @@ async function updatePrices(targetCurrency) {
                 assets[i].price = latestPrice;
             }
         }
-    } // <--- 🔴 這是 for 迴圈的結束
+    } // <--- 這是 for 迴圈的結束
 
-    // 🔴 以下動作在迴圈結束後只會執行一次
+    // 以下動作在迴圈結束後只會執行一次
     saveAndRefresh(); 
     btn.disabled = false; 
     btn.innerText = originalText; // 恢復原本按鈕文字
@@ -388,7 +554,7 @@ async function handleNewItem() {
     
     if (!code || !cat) { alert("請填寫名稱與選擇分類"); return; }
 
-    // --- 🔴 隱藏指令檢查 ---
+    // --- 隱藏指令檢查 ---
     if (code === "隱藏") {
     if (!cat) { alert("請選擇要隱藏的分類"); return; }
     if (!hiddenCategories.includes(cat)) {
@@ -398,6 +564,7 @@ async function handleNewItem() {
     // 不顯示任何提示文字，直接清空並刷新
     document.getElementById('code').value = '';
     refresh();
+    renderHistoryChart(); // 🟢 補上這行：即時更新歷史資產曲線圖
     return; 
 }
 
@@ -452,13 +619,16 @@ if (code === "開啟") {
     if (isRepay) {
         item.repayDay = Number(document.getElementById('repayDay').value) || 0;
         item.repayAmount = Number(document.getElementById('repayAmount').value) || 0;
-} else {
-        // 🟢 修正：如果沒有勾選「每月固定」，代表這是你當下「手動新增的單筆收支」
+        item.interestRate = parseFloat(document.getElementById('interestRate').value) || 0;
+        item.totalPeriods = parseInt(document.getElementById('totalPeriods').value) || 0;
+        item.paidPeriods = parseInt(document.getElementById('paidPeriods').value) || 0;
+  } else {
+        // 如果沒有勾選「每月固定」，代表這是你當下「手動新增的單筆收支」
         if (cat === '支出' || cat === '收入') {
             // 在你的資產內，尋找名稱叫「台幣現金」的項目
             let cashAccount = assets.find(a => a.symbol === '台幣現金' || a.originalSymbol === '台幣現金');
             if (cashAccount) {
-                // 🟢 配合你的習慣：因為你手動輸入負數（例如 -500），加上負數（+=）就會自動變成扣除
+                // 配合你的習慣：因為你手動輸入負數（例如 -500），加上負數（+=）就會自動變成扣除
                 cashAccount.qty += qty; 
                 console.log(`[手動單筆連動] 已從台幣現金變動金額: ${qty}`);
            }
@@ -473,6 +643,10 @@ if (code === "開啟") {
     document.getElementById('qty').value = '';
     document.getElementById('repayDay').value = '';
     document.getElementById('repayAmount').value = '';
+    document.getElementById('repayAmount').value = '';
+    document.getElementById('interestRate').value = '';
+    document.getElementById('totalPeriods').value = '';
+    document.getElementById('paidPeriods').value = '';
     document.getElementById('enableRepay').checked = false;
     document.getElementById('debtFields').style.display = 'none';
 }
@@ -496,6 +670,7 @@ function executeToggleHide() {
             `<svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>`;
     }
     refresh();
+    renderHistoryChart(); // 🟢 補上這行：切換金額遮罩時同步更新趨勢圖提示字
 }
 
 function toggleSortMode() {
@@ -534,9 +709,9 @@ async function saveAndRefresh() {
     try {
         await fetch(YOUR_SCRIPT_URL, {
             method: "POST",
-            mode: 'no-cors',
-            headers: { "Content-Type": "application/json" },
-            // 🔴 關鍵：把 hiddenCats 一併打包上傳
+            mode: 'cors',
+            headers: { "Content-Type": "text/plain" }, // 改為 text/plain 完美避開 Apps Script 的 CORS 限制
+            // 把 hiddenCats 一併打包上傳
             body: JSON.stringify({ 
                 action: "saveAllData", 
                 assets: assets,
@@ -549,10 +724,11 @@ async function saveAndRefresh() {
     }
 }
 
-function refresh() {
+async function refresh() {
         const container = document.getElementById('categoryList');
         container.innerHTML = '';
         currentTotal = 0;
+let assetOnlyTotal = 0;
         
         // --- 時間顯示邏輯 ---
         const now = new Date();
@@ -569,8 +745,44 @@ function refresh() {
         const groups = {};
 categories.forEach(c => groups[c] = { sum: 0, items: [] });
 
+// --- 第一步：準備渲染資料 (修復 finalProcessedItems 未定義報錯) ---
+    const finalProcessedItems = assets.map((a, i) => {
+        if (hiddenCategories.includes(a.category)) return null;
+        
+        const val = a.currency === 'USD' ? (a.price * a.qty * usdToTwd) : (a.price * a.qty);
+        
+        // 只有在「同時是收支項目」且「沒有設定固定扣款/入帳日」且「不是本月建立」的情況下，才予以隱藏。
+        // 有設定 repayDay 的固定項目在新月份會被安全保留。
+        const itemDate = a.date ? new Date(a.date) : now;
+        const isIncomeOrExpense = (a.category === '支出' || a.category === '收入');
+        const isFixedItem = (a.repayDay && a.repayDay !== 0);
+        const isNotCurrentMonth = (itemDate.getMonth() + 1 !== curMonth);
 
-// 第一步：先建立所有項目的基礎數據，並找到「台幣現金」物件
+        if (isIncomeOrExpense && !isFixedItem && isNotCurrentMonth) {
+            return null;
+        }
+
+        return { ...a, displayVal: val, i };
+    }).filter(x => x !== null);
+
+// --- 在此優先計算正確的 currentTotal (分母) ---
+    // 確保在跑渲染循環前，currentTotal 已經是排除收支後的「純資產總額」
+    currentTotal = finalProcessedItems.reduce((acc, item) => {
+        if (item.category !== '收入' && item.category !== '支出') {
+            return acc + item.displayVal;
+        }
+        return acc;
+    }, 0);
+
+// --- 讓 HTML 渲染時能抓到正確的純資產總額 ---
+assetOnlyTotal = finalProcessedItems.reduce((acc, item) => {
+    if (item.category !== '收入' && item.category !== '支出') {
+        return acc + Math.abs(item.displayVal);
+    }
+    return acc;
+}, 0);
+
+// 第二步：先建立所有項目的基礎數據，並找到「台幣現金」物件
     let twdCashItem = null;
     const tempProcessedItems = assets.map((a, i) => {
         if (hiddenCategories.includes(a.category)) return null;
@@ -588,75 +800,103 @@ categories.forEach(c => groups[c] = { sum: 0, items: [] });
         return itemObj;
     }).filter(x => x !== null);
 
-// 第二步：處理收入/支出的連動 (每到設定日期，自動入帳/扣款至台幣現金)
+// 第三步：處理收入/支出的連動 (每到設定日期，自動入帳/扣款至台幣現金)
 let needsSave = false;
-const currentYearMonth = `${now.getFullYear()}-${curMonth}`; // 建立今年當月的標籤，例如 "2026-5"
+const currentYearMonth = `${now.getFullYear()}-${curMonth.toString().padStart(2, '0')}`; 
 
-assets.forEach((item, idx) => {
-    // 檢查這是不是有設定「還款日/入帳日」的收入或支出項目
-    if ((item.category === '支出' || item.category === '收入') && item.repayDay && item.repayDay !== 0) {
+for (let idx = 0; idx < assets.length; idx++) {
+    const item = assets[idx];
+    
+    // 最外層包含'存股','定期定額','貸款','收入','支出'
+    if ((item.category === '存股' || item.category === '定期定額' || item.category === '貸款' || item.category === '收入' || item.category === '支出') && item.repayDay && item.repayDay !== 0) {
         
-        // 條件 1：今天的日期已經大於或等於設定的入帳日
         const isTimeUp = (curDay >= item.repayDay);
-        
-        // 條件 2：這個月這個項目還沒有被執行過入帳
         const notProcessedThisMonth = (item.lastProcessedMonth !== currentYearMonth);
 
+        // 關鍵：所有自動扣款項目，都必須同時滿足「時間到」且「當月未處理」
         if (isTimeUp && notProcessedThisMonth) {
-            if (twdCashItem) {
-                // 取得要變動的金額：優先使用修改過的固定扣款金額 repayAmount，若無則使用 qty
+            
+            // ====== 1. 定期定額邏輯 ======
+            if (item.category === '定期定額' || item.category === '存股') {
+                const fixedAmount = Number(item.repayAmount) || 0;
+                let queryTarget = item.originalSymbol || item.symbol;
+
+                console.log(`[定期定額觸發] 項目: ${item.symbol}，發送台股代碼: ${queryTarget}`);
+
+                try {
+                    const latestPrice = await getPrice(queryTarget);
+                    let currentPrice = parseFloat(latestPrice);
+                    
+                    if (currentPrice && !isNaN(currentPrice)) {
+                        const buyQty = Math.floor(fixedAmount / currentPrice);
+
+                        if (buyQty > 0) {
+                            const actualCost = Math.round(buyQty * currentPrice);
+
+                            assets[idx].qty = (parseFloat(assets[idx].qty) || 0) + buyQty;
+                            assets[idx].price = currentPrice;
+                            assets[idx].unit = '股'; // 強制寫入單位為「股」
+
+                            if (twdCashItem) {
+                                assets[twdCashItem.i].qty -= actualCost;
+                                console.log(`[定期定額成功] ${item.symbol} 買入 ${buyQty} 股`);
+                            }
+                            
+                            // 確實標記並存檔
+                            assets[idx].lastProcessedMonth = currentYearMonth;
+                            needsSave = true;
+                        }
+                    }
+                } catch (err) {
+                    console.error(`價格獲取失敗: ${err}`);
+                }
+            }
+            
+            // ====== 2. 貸款邏輯 ======
+            else if (item.category === '貸款') {
+                const totalRepay = Number(item.repayAmount) || 0; 
+                const annualRate = Number(item.interestRate) || 0; 
+                const currentLoanBalance = Math.abs(Number(item.qty)) || 0; 
+
+                let principalPaid = totalRepay; 
+
+                if (annualRate > 0 && currentLoanBalance > 0) {
+                    const monthlyRate = (annualRate / 100) / 12; 
+                    const interestPaid = currentLoanBalance * monthlyRate; 
+                    principalPaid = totalRepay - interestPaid; 
+                    if (principalPaid < 0) principalPaid = 0; 
+                }
+
+                assets[idx].qty += Number(principalPaid.toFixed(2));
+                assets[idx].paidPeriods = (Number(assets[idx].paidPeriods) || 0) + 1;
+                
+                assets[idx].lastProcessedMonth = currentYearMonth;
+                needsSave = true;
+                console.log(`[貸款自動化] 項目:${item.symbol}, 利息:${(totalRepay - principalPaid).toFixed(0)}, 實還本金:${principalPaid.toFixed(0)}`);
+            } 
+            
+            // ====== 3. 一般收支連動 ======
+            else if (twdCashItem) {
                 const baseAmount = item.repayAmount || item.qty || 0;
                 const val = item.currency === 'USD' ? (item.price * baseAmount * usdToTwd) : (item.price * baseAmount);
                 
-                // 執行變動（支出項目在輸入時若為負數，這裡加算 val 就會自然變成扣款）
                 assets[twdCashItem.i].qty += val;
                 
-                // 🔴 關鍵核心：標記「今年當月」已處理，這樣這個月內就算天天打開網頁，也絕不會重複扣款/入帳
                 assets[idx].lastProcessedMonth = currentYearMonth;
-                assets[idx].isProcessed = true; // 相容舊版標記
+                assets[idx].isProcessed = true; 
                 needsSave = true;
                 
                 console.log(`[自動入帳成功] 項目: ${item.symbol}, 金額: ${val}, 已計入台幣現金。`);
             }
         }
     }
-});
+}
 
 // 如果數據有變動，存檔並跳出，讓 saveAndRefresh 重新觸發一次乾淨的 refresh
 if (needsSave) {
     saveAndRefresh();
     return; 
 }
-
-// --- 第三步：🔴 準備渲染資料 (修復 finalProcessedItems 未定義報錯) ---
-    const finalProcessedItems = assets.map((a, i) => {
-        if (hiddenCategories.includes(a.category)) return null;
-        
-        const val = a.currency === 'USD' ? (a.price * a.qty * usdToTwd) : (a.price * a.qty);
-        
-        // 🟢 修正後的過濾邏輯：
-        // 只有在「同時是收支項目」且「沒有設定固定扣款/入帳日」且「不是本月建立」的情況下，才予以隱藏。
-        // 有設定 repayDay 的固定項目在新月份會被安全保留。
-        const itemDate = a.date ? new Date(a.date) : now;
-        const isIncomeOrExpense = (a.category === '支出' || a.category === '收入');
-        const isFixedItem = (a.repayDay && a.repayDay !== 0);
-        const isNotCurrentMonth = (itemDate.getMonth() + 1 !== curMonth);
-
-        if (isIncomeOrExpense && !isFixedItem && isNotCurrentMonth) {
-            return null;
-        }
-
-        return { ...a, displayVal: val, i };
-    }).filter(x => x !== null);
-
-// --- 🔴 新增：在此優先計算正確的 currentTotal (分母) ---
-    // 確保在跑渲染循環前，currentTotal 已經是排除收支後的「純資產總額」
-    currentTotal = finalProcessedItems.reduce((acc, item) => {
-        if (item.category !== '收入' && item.category !== '支出') {
-            return acc + item.displayVal;
-        }
-        return acc;
-    }, 0);
 
     // 第四步：依照分類進行渲染
     categories.forEach((name, idx) => {
@@ -670,7 +910,7 @@ if (needsSave) {
 let displayPerc = "";
         if (currentTotal > 0) {
             // 計算佔比
-            const perc = ((g.sum / currentTotal) * 100).toFixed(1);
+            const perc = ((g.sum / currentTotal) * 100).toFixed(2);
 
         if (name !== '收入' && name !== '支出'){
 
@@ -724,7 +964,7 @@ ${g.items.map(item => {
     const displayDay = item.repayDay;
 
     // 自動判斷：分類是貸款/其他，且今天日期 >= 設定的扣款日
-    const isTargetCat = ['貸款', '其他', '收入', '支出'].includes(item.category);
+    const isTargetCat = ['存股', '定期定額','貸款', '其他', '收入', '支出'].includes(item.category);
 
     const showRepaid = hasRepaySetting && isTargetCat && today >= item.repayDay;
     const showPending = hasRepaySetting && isTargetCat && today < item.repayDay;
@@ -746,8 +986,11 @@ const finalDay = item.repayDay || 0;
             </div>
 
             <div class="qty-badge" style="cursor:pointer; margin-bottom: 4px;" onclick="const q=prompt('修改數量/金額', '${item.qty}'); if(q!==null){assets[${itemIdx}].qty=Number(q); saveAndRefresh();}">
-
-    ${Math.round(item.qty || 0).toLocaleString()} ${item.category.includes('股')?'股':(item.currency==='USD'?'美元':'台幣')} ✎
+    ${(() => {
+        // 優先讀取後端 item.unit，若無則走原本的股/美元/台幣邏輯
+        const displayUnit = item.unit ? item.unit : ((item.category.includes('股') || item.category === '定期定額') ? '股' : (item.currency === 'USD' ? '美元' : '台幣'));
+        return `${Math.round(item.qty || 0).toLocaleString()} ${displayUnit} ✎`;
+    })()}
 </div>
             
             ${item.type === 'auto' ? `
@@ -761,21 +1004,28 @@ const finalDay = item.repayDay || 0;
                 ${showRepaid ? `
                 <div style="margin-top:4px;">
                     <span class="price-tag" onclick="editRepayDay(${itemIdx})" style="background:rgba(50,215,75,0.1); color:#81c784; border:none; padding:2px 8px; cursor:pointer;">
-                        ${isIncomeItem ? '✅ 本月已入帳' : '✅ 本月已還款'} (入帳日: ${finalDay}號) ✎
+                        ${isIncomeItem ? '✅ 本月已入帳' : '✅ 本月已入帳'} (入帳日: ${finalDay}號) ✎
                     </span>
                 </div>
             ` : showPending ? `
                 <div style="margin-top:4px;">
                     <span class="price-tag" onclick="editRepayDay(${itemIdx})" style="background:rgba(255,255,255,0.05); color:#999; border:none; padding:2px 8px; cursor:pointer;">
-                        ${isIncomeItem ? '⏳ 預計入帳' : '⏳ 未到還款日'} (入帳日: ${finalDay}號) ✎
+                        ${isIncomeItem ? '⏳ 預計入帳' : '⏳ 未到入帳日'} (入帳日: ${finalDay}號) ✎
                     </span>
                 </div>
             ` : ''}
         </div>
 
-        <div style="text-align:right; display: flex; flex-direction: column; justify-content: center;">
-            <div style="font-weight:700; font-size: 1.1rem; color:${item.displayVal < 0 ? 'var(--negative)' : 'white'}">
-                ${isHidden ? '****' : '$' + Math.round(item.displayVal || 0).toLocaleString()}
+                <!-- 修正後的右側金額與百分比區塊 -->
+        <div style="text-align:right; display: flex; flex-direction: column; justify-content: center; align-items: flex-end;">
+            <div style="display: flex; align-items: center; gap: 6px; font-weight:700; font-size: 1.1rem; color:${item.displayVal < 0 ? 'var(--negative)' : 'white'}">
+                
+                <span style="color: var(--subtext); font-size: 0.85rem; font-weight: 400; margin-right: 2px;">
+                    ${(typeof assetOnlyTotal !== 'undefined' && assetOnlyTotal > 0) ? ((Math.abs(item.displayVal) / assetOnlyTotal) * 100).toFixed(2) : 0}%
+                </span>
+                <span>
+                    ${isHidden ? '****' : '$' + Math.round(item.displayVal || 0).toLocaleString()}
+                </span>
             </div>
             <span class="remove-link" style="cursor:pointer;" onclick="if(confirm('確定移除？')){assets.splice(${itemIdx},1); saveAndRefresh();}">移除</span>
         </div>
@@ -806,7 +1056,7 @@ const finalDay = item.repayDay || 0;
                 const val = Math.abs(groups[cat].sum);
                 const color = COLORS[i % COLORS.length];
 
-                // --- 🔵 修改處 2：過濾圓餅圖顯示 ---
+                // --- 過濾圓餅圖顯示 ---
                 // 只有「非收支」項目會被 push 進 data，確保圓餅圖加總永遠是 100% 資產
                 if (cat !== '收入' && cat !== '支出') {
                     labels.push(cat); 
@@ -814,7 +1064,7 @@ const finalDay = item.repayDay || 0;
                     bg.push(color);
                 }
 
-                // --- 🔵 修改處 3：百分比顯示邏輯 ---
+                // --- 百分比顯示邏輯 ---
                 let displayPerc = "";
                 if (assetOnlyTotal > 0) {
                     // 不管是資產還是收支，統一除以「純資產總額」
@@ -852,7 +1102,7 @@ type: 'doughnut',
 responsive: true,
     maintainAspectRatio: false,
     layout: {
-        padding: 15 // 🔴 加入這行，給圓餅圖留 15px 的呼吸空間
+        padding: 15 //給圓餅圖留 15px 的呼吸空間
     },
         cutout: '75%', // 稍微調細一點點，放大效果更明顯
         plugins: { 
@@ -875,13 +1125,13 @@ responsive: true,
 if (isHidden) {
                     return ` ${label}: $****`; 
                 }
-            let percent = ((value / assetOnlyTotal) * 100).toFixed(1);
+            let percent = ((value / assetOnlyTotal) * 100).toFixed(2);
             return ` ${label}: $${Math.round(value).toLocaleString()} (${percent}%)`;
 }
                         }
                     }
                 },
-                // 🔴 確保互動模式正確
+                // 確保互動模式正確
                 hover: { mode: 'nearest', intersect: true },
                 animation: { duration: 400 }
             }
@@ -890,7 +1140,7 @@ if (isHidden) {
 
     // 啟動初始化
 window.onload = async () => {
-    document.addEventListener("touchstart", function() {}, true);// 🔴 加入這一行，強制啟動手機版的點擊回饋
+    document.addEventListener("touchstart", function() {}, true);// 強制啟動手機版的點擊回饋
     isHidden = true;
     isVerified = false;
     const btn = document.getElementById('hideBtn');
@@ -904,7 +1154,7 @@ window.onload = async () => {
 // 從雲端抓取所有數據 (資產 + 隱藏清單)
     document.getElementById('status').innerText = "☁️ 正在從雲端同步設定...";
     try {
-        // 🔴 這裡 action 改為 getAllData，一次抓回資產和隱藏設定
+        // 這裡 action 改為 getAllData，一次抓回資產和隱藏設定
         const res = await fetch(`${YOUR_SCRIPT_URL}?action=getAllData`);
         const cloudData = await res.json();
         
@@ -914,7 +1164,7 @@ window.onload = async () => {
                 assets = cloudData.assets;
                 localStorage.setItem('percento_dark_data', JSON.stringify(assets));
             }
-            // 🔴 關鍵：同步隱藏分類清單
+            // 同步隱藏分類清單
             if (cloudData.hiddenCats) {
                 hiddenCategories = cloudData.hiddenCats;
                 localStorage.setItem('percento_hidden_cats', JSON.stringify(hiddenCategories));
@@ -944,6 +1194,9 @@ document.getElementById('repayDay').value = '';
 document.getElementById('repayAmount').value = '';
 document.getElementById('enableRepay').checked = false; // 重設滑塊開關
 document.getElementById('debtFields').style.display = 'none'; // 隱藏欄位
+document.getElementById('interestRate').value = '';
+document.getElementById('totalPeriods').value = '';
+document.getElementById('paidPeriods').value = '';
 
 function changeItemCategory(index) {
     // 建立一個分類清單字串供使用者選擇
@@ -984,7 +1237,7 @@ function editRepayDay(i) {
             if (newFixAmount !== null && newFixAmount.trim() !== "") {
                 const amtNum = Number(newFixAmount);
                 if (!isNaN(amtNum)) {
-                    // 🔴 關鍵點：修改的是 repayAmount，而不是總額 -3334
+                    // 修改的是 repayAmount，而不是總額 -3334
                     assets[i].repayAmount = amtNum;
                 }
             }
@@ -1029,6 +1282,7 @@ function pressKey(num) {
                     hiddenCategories = hiddenCategories.filter(c => c !== pendingCat);
                     localStorage.setItem('percento_hidden_cats', JSON.stringify(hiddenCategories));
                     refresh();
+                    renderHistoryChart(); // 🟢 補上這行：解鎖分類後即時刷新曲線圖
                     closePwdModal();
                 } else {
                     authFailed();

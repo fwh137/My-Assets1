@@ -221,6 +221,53 @@ input:not([type="checkbox"]), select {
     border: 1px solid rgba(10, 132, 255, 0.3) !important; /* 加一點纖細的邊框增強質感 */
 }
 
+.range-btn {
+    padding: 6px 14px;
+    font-size: 12px;
+    border-radius: 20px;
+    border: 1px solid #333;
+    background: transparent;
+    color: var(--subtext);
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+.range-btn.active {
+    background: var(--accent);
+    color: white;
+    border-color: var(--accent);
+}
+
+/* 預設圖表容器基礎高度 */
+.chart-container {
+    position: relative;
+    width: 100%;
+    height: 320px;
+}
+
+/* 僅針對「第二頁 (page-history)」在寬螢幕/橫放時解除寬度限制 */
+@media (min-width: 768px), (orientation: landscape) {
+    /* 當切換到第二頁時，打破外層容器的 480px 限制 */
+    .container:has(#page-history[style*="display: block"]),
+    body:has(#page-history[style*="display: block"]) .container {
+        max-width: 900px !important;
+        width: 100% !important;
+    }
+
+    /* 確保第二頁卡片佔滿寬度 */
+    #page-history, 
+    #page-history .chart-box {
+        max-width: 100% !important;
+        width: 100% !important;
+    }
+
+    /* 圖表高度適度拉高 */
+    .chart-container {
+        height: 450px !important;
+    }
+}
+
+*/ ===CSS結尾=== /*
+
     </style>
 </head>
 <body>
@@ -286,21 +333,60 @@ input:not([type="checkbox"]), select {
 <!-- 🟢第二頁（資產歷史頁面） -->
     <div id="page-history" style="display: none;">
         <div class="chart-box">
-            <h3 style="margin-top: 0; font-size: 1.1rem; text-align: left; color: var(--text);">近 30 天資產曲線</h3>
-            <div style="position: relative; width: 100%; height: 300px; margin-top: 15px;">
-                <canvas id="assetHistoryChart"></canvas>
+            <h3 style="margin-top: 0; font-size: 1.1rem; text-align: left; color: var(--text);">資產趨勢</h3>
+            
+            <!-- 時間範圍切換按鈕與自訂日期區塊 -->
+            <div class="range-selector" style="display: flex; gap: 8px; margin-bottom: 15px; flex-wrap: wrap; align-items: center;">
+                <button class="range-btn active" onclick="setHistoryRange(7, this)" style="padding: 6px 14px; font-size: 12px; border-radius: 10px; border: 1px solid var(--accent); background: var(--accent); color: white; cursor: pointer;">7天</button>
+                <button class="range-btn" onclick="setHistoryRange(15, this)" style="padding: 6px 14px; font-size: 12px; border-radius: 10px; border: 1px solid #333; background: transparent; color: var(--subtext); cursor: pointer;">15天</button>
+                <button class="range-btn" onclick="setHistoryRange(31, this)" style="padding: 6px 14px; font-size: 12px; border-radius: 10px; border: 1px solid #333; background: transparent; color: var(--subtext); cursor: pointer;">31天</button>
+                <button class="range-btn" onclick="setHistoryRange('custom', this)" style="padding: 6px 14px; font-size: 12px; border-radius: 10px; border: 1px solid #333; background: transparent; color: var(--subtext); cursor: pointer;">自訂</button>
+
+                <!-- 自訂日期區塊 (預設隱藏) -->
+                <div id="customDateGroup" style="display: none; gap: 6px; align-items: center; margin-top: 6px; width: 100%;">
+                    <input type="date" id="historyStartDate" onchange="renderHistoryChart()" style="padding: 4px 8px; border-radius: 8px; background: #2c2c2e; color: #fff; border: 1px solid #38383a; font-size: 12px;">
+                    <span style="color: var(--subtext); font-size: 12px;">至</span>
+                    <input type="date" id="historyEndDate" onchange="renderHistoryChart()" style="padding: 4px 8px; border-radius: 8px; background: #2c2c2e; color: #fff; border: 1px solid #38383a; font-size: 12px;">
+                </div>
             </div>
+
+            <!-- 響應式圖表容器 -->
+        <div class="chart-container">
+            <canvas id="assetHistoryChart"></canvas>
         </div>
     </div>
-
 </div>
 
 <script>
 // 1. 全域變數
 let historyChart = null;
 let rawHistoryData = []; // 儲存後端抓回來的原始歷史數據
+let currentRange = 7;    // 預設顯示天數 (7, 15, 31 或 'custom')
 
-// 2. 頁面切換邏輯
+// 2. 切換時間範圍按鈕邏輯
+function setHistoryRange(range, btn) {
+    currentRange = range;
+    
+    // 更新按鈕 active 樣式
+    document.querySelectorAll('.range-btn').forEach(b => {
+        b.style.background = 'transparent';
+        b.style.color = 'var(--subtext)';
+        b.style.border = '1px solid #333';
+    });
+    btn.style.background = 'var(--accent)';
+    btn.style.color = 'white';
+    btn.style.border = '1px solid var(--accent)';
+
+    // 切換自訂日期輸入框顯示狀態
+    const customGroup = document.getElementById('customDateGroup');
+    if (customGroup) {
+        customGroup.style.display = (range === 'custom') ? 'flex' : 'none';
+    }
+
+    renderHistoryChart();
+}
+
+// 3. 頁面切換邏輯
 function switchPage(page) {
     const overviewPage = id => document.getElementById(id);
     const tabOverview = overviewPage('tab-overview');
@@ -338,7 +424,7 @@ function switchPage(page) {
     }
 }
 
-// 3. 向 GAS 讀取完整歷史數據
+// 4. 向 GAS 讀取完整歷史數據
 async function loadAssetHistory() {
     try {
         const res = await fetch(`${YOUR_SCRIPT_URL}?action=getHistory&t=${Date.now()}`, {
@@ -358,20 +444,35 @@ async function loadAssetHistory() {
     }
 }
 
-// 4. 根據前端目前的隱藏狀態即時計算並繪製折線圖
+// 5. 根據天數範圍與隱藏狀態即時計算並繪製折線圖
 function renderHistoryChart() {
     if (!rawHistoryData || rawHistoryData.length === 0) return;
+
+    // --- 日期過濾與排序邏輯 ---
+    let filteredData = [...rawHistoryData];
+    filteredData.sort((a, b) => new Date(a.date) - new Date(b.date));
+
+    if (currentRange === 'custom') {
+        const startVal = document.getElementById('historyStartDate')?.value;
+        const endVal = document.getElementById('historyEndDate')?.value;
+
+        if (startVal) filteredData = filteredData.filter(item => item.date >= startVal);
+        if (endVal) filteredData = filteredData.filter(item => item.date <= endVal);
+    } else if (typeof currentRange === 'number') {
+        // 依按鈕選擇截取最近 N 天數據
+        filteredData = filteredData.slice(-currentRange);
+    }
 
     const ctx = document.getElementById('assetHistoryChart').getContext('2d');
 
     // 處理 X 軸日期標籤 (顯示 MM/DD)
-    const labels = rawHistoryData.map(item => {
+    const labels = filteredData.map(item => {
         const parts = item.date.split('-');
         return parts.length === 3 ? `${parts[1]}/${parts[2]}` : item.date;
     });
 
     // 前端即時扣除：加總非「收入、支出」且未被 hiddenCategories 隱藏的類別
-    const dataValues = rawHistoryData.map(item => {
+    const dataValues = filteredData.map(item => {
         let dayTotal = 0;
         const details = item.details || {};
 
@@ -405,14 +506,22 @@ function renderHistoryChart() {
                 borderWidth: 2,
                 fill: true,
                 tension: 0.3,
-                pointRadius: 4,
-                pointBackgroundColor: '#0a84ff',
-                pointHoverRadius: 6
+                pointRadius: 2,                   // 預設點半徑 (設為 0 可隱藏)
+                pointHitRadius: 10,               // 保持滑鼠容易觸發感應
+                pointHoverRadius: 7,              // 懸停時點點放大半徑
+                pointHoverBackgroundColor: '#1c1c1e', // 內圈填滿顏色 (搭配深色背景)
+                pointHoverBorderColor: '#0a84ff', // 外圈圓環顏色 (主色藍)
+                pointHoverBorderWidth: 3          // 圓環邊框厚度
             }]
         },
         options: {
             responsive: true,
             maintainAspectRatio: false,
+            // 啟用流暢 hover 動畫
+            hover: {
+                mode: 'nearest',
+                intersect: false
+            },
             plugins: {
                 legend: { display: false },
                 tooltip: {

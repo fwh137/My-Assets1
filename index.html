@@ -354,20 +354,21 @@ input:not([type="checkbox"]), select {
 <!-- 🟢第二頁（資產歷史頁面） -->
     <div id="page-history" style="display: none;">
         <div class="chart-box">
+<div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 15px;">
             <h3 style="margin-top: 0; font-size: 1.1rem; text-align: left; color: var(--text);">資產趨勢</h3>
             
             <!-- 時間範圍切換按鈕與自訂日期區塊 -->
-            <div class="range-selector" style="display: flex; gap: 8px; margin-bottom: 15px; flex-wrap: wrap; align-items: center;">
+            <div class="range-selector" style="display: flex; gap: 8px; margin-bottom: 15px; flex-wrap: wrap; align-items: center; justify-content: flex-end;">
                 <button class="range-btn active" onclick="setHistoryRange(7, this)" style="padding: 6px 14px; font-size: 12px; border-radius: 10px; border: 1px solid var(--accent); background: var(--accent); color: white; cursor: pointer;">7天</button>
                 <button class="range-btn" onclick="setHistoryRange(15, this)" style="padding: 6px 14px; font-size: 12px; border-radius: 10px; border: 1px solid #333; background: transparent; color: var(--subtext); cursor: pointer;">15天</button>
                 <button class="range-btn" onclick="setHistoryRange(31, this)" style="padding: 6px 14px; font-size: 12px; border-radius: 10px; border: 1px solid #333; background: transparent; color: var(--subtext); cursor: pointer;">31天</button>
                 <button class="range-btn" onclick="setHistoryRange('custom', this)" style="padding: 6px 14px; font-size: 12px; border-radius: 10px; border: 1px solid #333; background: transparent; color: var(--subtext); cursor: pointer;">自訂</button>
-
+    </div>
                 <!-- 自訂日期區塊 (預設隱藏) -->
                 <div id="customDateGroup" style="display: none; gap: 6px; align-items: center; margin-top: 6px; width: 100%;">
-                    <input type="date" id="historyStartDate" onchange="renderHistoryChart()" style="padding: 4px 8px; border-radius: 8px; background: #2c2c2e; color: #fff; border: 1px solid #38383a; font-size: 12px;">
+                    <input type="date" id="historyStartDate" onchange="renderHistoryChart()" style="padding: 2px 4px !important; border-radius: 8px; background: #2c2c2e; color: #fff; border: 1px solid #38383a; font-size: 12px;">
                     <span style="color: var(--subtext); font-size: 12px;">至</span>
-                    <input type="date" id="historyEndDate" onchange="renderHistoryChart()" style="padding: 4px 8px; border-radius: 8px; background: #2c2c2e; color: #fff; border: 1px solid #38383a; font-size: 12px;">
+                    <input type="date" id="historyEndDate" onchange="renderHistoryChart()" style="padding: 2px 4px !important; border-radius: 8px; background: #2c2c2e; color: #fff; border: 1px solid #38383a; font-size: 12px;">
                 </div>
             </div>
 

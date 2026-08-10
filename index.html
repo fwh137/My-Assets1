@@ -423,6 +423,15 @@ function toggleHistoryCategory(catName) {
     } else {
         selectedHistoryCats.push(catName);
     }
+
+    // 🟢 寫入本地記憶
+    localStorage.setItem('percento_selected_cats', JSON.stringify(selectedHistoryCats));
+
+    // 🟢 同步寫入雲端 (呼叫你原本寫好的 saveAndRefresh)
+    if (typeof saveAndRefresh === 'function') {
+        saveAndRefresh();
+    }
+
     renderHistoryChart();
 }
 
@@ -1346,7 +1355,7 @@ window.onload = async () => {
                 assets = cloudData.assets;
                 localStorage.setItem('percento_dark_data', JSON.stringify(assets));
             }
-            // 同步隱藏分類清單🟢 關鍵修正：優先使用本地的隱藏紀錄；只有當本地為空時，才讀取雲端的 hiddenCats
+            // 同步隱藏分類清單優先使用本地的隱藏紀錄；只有當本地為空時，才讀取雲端的 hiddenCats
             const localHidden = localStorage.getItem('percento_hidden_cats');
             if (localHidden !== null) {
                 hiddenCategories = JSON.parse(localHidden);
@@ -1354,12 +1363,25 @@ window.onload = async () => {
                 hiddenCategories = cloudData.hiddenCats;
                 localStorage.setItem('percento_hidden_cats', JSON.stringify(hiddenCategories));
             }
+
+            // 🟢同步歷史圖表選取的分類：優先使用本地紀錄；若無則讀取雲端
+            const localSelectedCats = localStorage.getItem('percento_selected_cats');
+            if (localSelectedCats !== null) {
+                selectedHistoryCats = JSON.parse(localSelectedCats);
+            } else if (cloudData.selectedCats) {
+                selectedHistoryCats = cloudData.selectedCats;
+                localStorage.setItem('percento_selected_cats', JSON.stringify(selectedHistoryCats));
+            }
         }
-    } catch(e) {
+    }catch(e) {
         console.log("雲端同步失敗，使用本地存檔");
         // 失敗時，至少從本地讀取隱藏清單，避免手機端完全沒設定
         const localHidden = localStorage.getItem('percento_hidden_cats');
         if (localHidden) hiddenCategories = JSON.parse(localHidden);
+
+        // 🟢 失敗時，補讀取的歷史分類狀態
+        const localSelectedCats = localStorage.getItem('percento_selected_cats');
+        if (localSelectedCats) selectedHistoryCats = JSON.parse(localSelectedCats);
     }
 
     // 原有的匯率同步

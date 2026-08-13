@@ -1393,72 +1393,74 @@ if (isHidden) {
     // 啟動初始化
 window.onload = async () => {
     document.addEventListener("touchstart", function() {}, true);// 強制啟動手機版的點擊回饋
+
+    // 1. 初始化 DOM 基礎 UI
     isHidden = true;
     isVerified = false;
     const btn = document.getElementById('hideBtn');
-    if(btn) {
-        btn.innerHTML = isHidden ? 
-            `<svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>` : 
-            `<svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>`;
+    if (btn) {
+        btn.innerHTML = `<svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>`;
     }
     initCategorySelect();
-    
-// 從雲端抓取所有數據 (資產 + 隱藏清單)
-    document.getElementById('status').innerText = "☁️ 正在從雲端同步設定...";
-    try {
-        // 這裡 action 改為 getAllData，一次抓回資產和隱藏設定
-        const res = await fetch(`${YOUR_SCRIPT_URL}?action=getAllData`);
-        const cloudData = await res.json();
-        
-        if (cloudData) {
-            // 同步資產
-            if (cloudData.assets && cloudData.assets.length > 0) {
-                assets = cloudData.assets;
-                localStorage.setItem('percento_dark_data', JSON.stringify(assets));
-            }
-            // 同步隱藏分類清單優先使用本地的隱藏紀錄；只有當本地為空時，才讀取雲端的 hiddenCats
-            const localHidden = localStorage.getItem('percento_hidden_cats');
-            if (localHidden !== null) {
-                hiddenCategories = JSON.parse(localHidden);
-            } else if (cloudData.hiddenCats) {
-                hiddenCategories = cloudData.hiddenCats;
-                localStorage.setItem('percento_hidden_cats', JSON.stringify(hiddenCategories));
-            }
 
-            // 🟢同步歷史圖表選取的分類：優先使用本地紀錄；若無則讀取雲端
-            const localSelectedCats = localStorage.getItem('percento_selected_cats');
-            if (localSelectedCats !== null) {
-                selectedHistoryCats = JSON.parse(localSelectedCats);
-            } else if (cloudData.selectedCats) {
-                selectedHistoryCats = cloudData.selectedCats;
-                localStorage.setItem('percento_selected_cats', JSON.stringify(selectedHistoryCats));
-            }
-        }
-    }catch(e) {
-        console.log("雲端同步失敗，使用本地存檔");
-        // 失敗時，至少從本地讀取隱藏清單，避免手機端完全沒設定
-        const localHidden = localStorage.getItem('percento_hidden_cats');
-        if (localHidden) hiddenCategories = JSON.parse(localHidden);
+    // 🟢 2. ⚡ 秒開體驗：優先載入本地資料並立即繪製畫面
+    const localHidden = localStorage.getItem('percento_hidden_cats');
+    if (localHidden) hiddenCategories = JSON.parse(localHidden);
 
-        // 🟢 失敗時，補讀取的歷史分類狀態
-        const localSelectedCats = localStorage.getItem('percento_selected_cats');
-        if (localSelectedCats) selectedHistoryCats = JSON.parse(localSelectedCats);
-    }
+    const localSelectedCats = localStorage.getItem('percento_selected_cats');
+    if (localSelectedCats) selectedHistoryCats = JSON.parse(localSelectedCats);
 
-    // 🟢 讀取 F5 重整前備份的「長按前勾選狀態」
     const savedPrevious = localStorage.getItem('percento_previous_cats');
     if (savedPrevious) {
         try { previousHistoryCats = JSON.parse(savedPrevious); } catch(e){}
     }
 
-    // 原有的匯率同步
-    try {
-        const res = await fetch('https://open.er-api.com/v6/latest/USD');
-        const d = await res.json(); usdToTwd = d.rates.TWD;
-    } catch(e) {}
-    
-    document.getElementById('status').innerText = "✅ 同步完成";
+    // 立即渲染本地 UI，不需等待網路請求
     refresh();
+
+    // 🟢 3. 背景非同步同步 (並行發送請求)
+    document.getElementById('status').innerText = "☁️ 正在背景同步...";
+
+    try {
+        // 使用 Promise.all 同時請求 GAS 與匯率 API
+        const [cloudRes, rateRes] = await Promise.allSettled([
+            fetch(`${YOUR_SCRIPT_URL}?action=getAllData`),
+            fetch('https://open.er-api.com/v6/latest/USD')
+        ]);
+
+        // 處理匯率資料
+        if (rateRes.status === 'fulfilled') {
+            const d = await rateRes.value.json();
+            if (d && d.rates && d.rates.TWD) usdToTwd = d.rates.TWD;
+        }
+
+        // 處理雲端資產資料
+        if (cloudRes.status === 'fulfilled') {
+            const cloudData = await cloudRes.value.json();
+            if (cloudData) {
+                if (cloudData.assets && cloudData.assets.length > 0) {
+                    assets = cloudData.assets;
+                    localStorage.setItem('percento_dark_data', JSON.stringify(assets));
+                }
+                if (!localHidden && cloudData.hiddenCats) {
+                    hiddenCategories = cloudData.hiddenCats;
+                    localStorage.setItem('percento_hidden_cats', JSON.stringify(hiddenCategories));
+                }
+                if (!localSelectedCats && cloudData.selectedCats) {
+                    selectedHistoryCats = cloudData.selectedCats;
+                    localStorage.setItem('percento_selected_cats', JSON.stringify(selectedHistoryCats));
+                }
+            }
+        }
+
+        document.getElementById('status').innerText = "✅ 同步完成";
+        // 雲端資料同步後，再刷新一次最新狀態
+        refresh();
+
+    } catch(e) {
+        console.log("背景同步發生異常:", e);
+        document.getElementById('status').innerText = "⚠️ 使用離線資料";
+    }
 };
 
 // 在 handleNewItem 函數末端加入

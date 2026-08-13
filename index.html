@@ -388,6 +388,11 @@ let rawHistoryData = []; // 儲存後端抓回來的原始歷史數據
 let currentRange = 7;    // 預設顯示天數 (7, 15, 31 或 'custom')
 let selectedHistoryCats = null; // 紀錄歷史頁面當前勾選開啟的分類 (null 代表預設全選)
 
+// 🟢 新增：長按相關變數與前次狀態備份
+let pressTimer = null;
+let isLongPress = false;
+let previousHistoryCats = null;
+
 // 2. 切換時間範圍按鈕邏輯
 function setHistoryRange(range, btn) {
     currentRange = range;
@@ -411,7 +416,7 @@ function setHistoryRange(range, btn) {
     renderHistoryChart();
 }
 
-// 3. 切換分類膠囊按鈕開關
+// 3. 切換分類膠囊按鈕開關 (短按)
 function toggleHistoryCategory(catName) {
     if (!selectedHistoryCats) return;
     
@@ -424,14 +429,66 @@ function toggleHistoryCategory(catName) {
         selectedHistoryCats.push(catName);
     }
 
+// 🟢 新增：手動短按改變了勾選狀態，清除舊的長按回復備份
+    previousHistoryCats = null;
+    localStorage.removeItem('percento_previous_cats');
+
     // 🟢 寫入本地記憶
     localStorage.setItem('percento_selected_cats', JSON.stringify(selectedHistoryCats));
-
     // 🟢 同步寫入雲端 (呼叫你原本寫好的 saveAndRefresh)
     if (typeof saveAndRefresh === 'function') {
         saveAndRefresh();
     }
+    renderHistoryChart();
+}
 
+// 🟢 長按觸發：開始計時 (500ms)
+function startPressTimer(catName) {
+    isLongPress = false;
+    pressTimer = setTimeout(() => {
+        isLongPress = true;
+        selectOnlyCategory(catName); // 觸發獨占或恢復
+    }, 500);
+}
+
+// 🟢 鬆開或手指移開：取消計時，若非長按則觸發短按
+function cancelPressTimer(catName, event) {
+    clearTimeout(pressTimer);
+    if (!isLongPress && event.type === 'pointerup') {
+        toggleHistoryCategory(catName);
+    }
+}
+
+// 🟢 獨占模式與回復前次狀態邏輯（支援 F5 重整後記憶）
+function selectOnlyCategory(catName) {
+    if (navigator.vibrate) navigator.vibrate(50); // 震動回饋
+
+    // 1. 若全域變數為 null，嘗試從 localStorage 讀取備份
+    if (!previousHistoryCats) {
+        const savedPrevious = localStorage.getItem('percento_previous_cats');
+        if (savedPrevious) {
+            try { previousHistoryCats = JSON.parse(savedPrevious); } catch(e){}
+        }
+    }
+
+    // 2. 判斷是否已經處於該分類獨占
+    const isAlreadyExclusive = selectedHistoryCats.length === 1 && selectedHistoryCats[0] === catName;
+
+    if (isAlreadyExclusive && previousHistoryCats) {
+        // 🔄 再次長按：恢復上一次的勾選狀態
+        selectedHistoryCats = [...previousHistoryCats];
+        previousHistoryCats = null;
+        localStorage.removeItem('percento_previous_cats'); // 清除備份記錄
+    } else {
+        // 📌 首次長按：備份當前狀態並切換為單一分類
+        previousHistoryCats = [...selectedHistoryCats];
+        localStorage.setItem('percento_previous_cats', JSON.stringify(previousHistoryCats)); // 寫入 localStorage
+        selectedHistoryCats = [catName];
+    }
+
+    // 儲存當前勾選狀態並重新繪製
+    localStorage.setItem('percento_selected_cats', JSON.stringify(selectedHistoryCats));
+    if (typeof saveAndRefresh === 'function') saveAndRefresh();
     renderHistoryChart();
 }
 
@@ -524,7 +581,11 @@ function renderHistoryChart() {
     if (btnContainer) {
         btnContainer.innerHTML = catList.map(cat => {
             const isActive = selectedHistoryCats.includes(cat);
-            return `<button class="cat-filter-btn ${isActive ? 'active' : ''}" onclick="toggleHistoryCategory('${cat}')">
+            return `<button class="cat-filter-btn ${isActive ? 'active' : ''}" 
+                        onpointerdown="startPressTimer('${cat}')"
+                        onpointerup="cancelPressTimer('${cat}', event)"
+                        onpointerleave="cancelPressTimer('${cat}', event)"
+                        style="touch-action: manipulation;">
                         ${isActive ? '✓ ' : ''}${cat}
                     </button>`;
         }).join('');
@@ -1382,6 +1443,12 @@ window.onload = async () => {
         // 🟢 失敗時，補讀取的歷史分類狀態
         const localSelectedCats = localStorage.getItem('percento_selected_cats');
         if (localSelectedCats) selectedHistoryCats = JSON.parse(localSelectedCats);
+    }
+
+    // 🟢 讀取 F5 重整前備份的「長按前勾選狀態」
+    const savedPrevious = localStorage.getItem('percento_previous_cats');
+    if (savedPrevious) {
+        try { previousHistoryCats = JSON.parse(savedPrevious); } catch(e){}
     }
 
     // 原有的匯率同步

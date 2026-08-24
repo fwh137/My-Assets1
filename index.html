@@ -1469,26 +1469,33 @@ window.onload = async () => {
     document.getElementById('status').innerText = "☁️ 正在背景同步...";
 
     try {
-        // 使用 Promise.all 同時請求 GAS 與匯率 API
+        // 使用 Promise.allSettled 同時請求 GAS 與匯率 API
         const [cloudRes, rateRes] = await Promise.allSettled([
             fetch(`${YOUR_SCRIPT_URL}?action=getAllData`),
             fetch('https://open.er-api.com/v6/latest/USD')
         ]);
 
-        // 處理匯率資料
+        // 1. 先處理匯率資料
         if (rateRes.status === 'fulfilled') {
             const d = await rateRes.value.json();
             if (d && d.rates && d.rates.TWD) usdToTwd = d.rates.TWD;
         }
 
-        // 處理雲端資產資料
+        // 2. 處理雲端資產資料（加入時間戳記防禦，避免舊電腦蓋掉新手機）
         if (cloudRes.status === 'fulfilled') {
             const cloudData = await cloudRes.value.json();
-            if (cloudData) {
-                if (cloudData.assets && cloudData.assets.length > 0) {
+            if (cloudData && cloudData.assets && cloudData.assets.length > 0) {
+                const cloudTime = cloudData.lastUpdated || 0;
+                const localTime = parseInt(localStorage.getItem('lastUpdated') || '0', 10);
+                const localDataStr = localStorage.getItem('percento_dark_data');
+
+                // 只有當「無本地暫存」或「雲端時間 >= 本地時間」才覆蓋
+                if (!localDataStr || cloudTime >= localTime) {
                     assets = cloudData.assets;
                     localStorage.setItem('percento_dark_data', JSON.stringify(assets));
+                    localStorage.setItem('lastUpdated', cloudTime || Date.now());
                 }
+
                 if (!localHidden && cloudData.hiddenCats) {
                     hiddenCategories = cloudData.hiddenCats;
                     localStorage.setItem('percento_hidden_cats', JSON.stringify(hiddenCategories));
@@ -1501,7 +1508,6 @@ window.onload = async () => {
         }
 
         document.getElementById('status').innerText = "✅ 同步完成";
-        // 雲端資料同步後，再刷新一次最新狀態
         refresh();
 
     } catch(e) {

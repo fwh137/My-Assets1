@@ -578,6 +578,14 @@ async function loadAssetHistory() {
 
         if (!Array.isArray(rawHistoryData) || rawHistoryData.length === 0) return;
 
+        // 🟢 新增：取得最新一筆歷史紀錄，更新本地資產快取與變數
+        const latestEntry = rawHistoryData[rawHistoryData.length - 1];
+        if (latestEntry && latestEntry.details) {
+          // 若最新紀錄包含明細，寫回 localStorage 防止手機端吃舊資料
+          localStorage.setItem('percento_dark_history', JSON.stringify(rawHistoryData));
+          if (typeof render === 'function') render();
+        }
+
         // 讀取成功後，執行即時繪圖
         renderHistoryChart();
     } catch (err) {
@@ -1486,22 +1494,18 @@ window.onload = async () => {
         if (cloudRes.status === 'fulfilled') {
             const cloudData = await cloudRes.value.json();
             if (cloudData && cloudData.assets && cloudData.assets.length > 0) {
-                const cloudTime = cloudData.lastUpdated || 0;
-                const localTime = parseInt(localStorage.getItem('lastUpdated') || '0', 10);
-                const localDataStr = localStorage.getItem('percento_dark_data');
+                // 🟢 移除時間戳記攔截，直接強制以雲端最新資料覆蓋本地快取
+                assets = cloudData.assets;
+                localStorage.setItem('percento_dark_data', JSON.stringify(assets));
 
-                // 只有當「無本地暫存」或「雲端時間 >= 本地時間」才覆蓋
-                if (!localDataStr || cloudTime >= localTime) {
-                    assets = cloudData.assets;
-                    localStorage.setItem('percento_dark_data', JSON.stringify(assets));
-                    localStorage.setItem('lastUpdated', cloudTime || Date.now());
+                if (cloudData.lastUpdated) {
+                    localStorage.setItem('lastUpdated', cloudData.lastUpdated);
                 }
-
-                if (!localHidden && cloudData.hiddenCats) {
+                if (cloudData.hiddenCats) {
                     hiddenCategories = cloudData.hiddenCats;
                     localStorage.setItem('percento_hidden_cats', JSON.stringify(hiddenCategories));
                 }
-                if (!localSelectedCats && cloudData.selectedCats) {
+                if (cloudData.selectedCats) {
                     selectedHistoryCats = cloudData.selectedCats;
                     localStorage.setItem('percento_selected_cats', JSON.stringify(selectedHistoryCats));
                 }

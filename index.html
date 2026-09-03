@@ -566,11 +566,12 @@ function switchPage(page) {
 
 // 5. 向 GAS 讀取完整歷史數據
 async function loadAssetHistory() {
-    try {
-        const res = await fetch(`${YOUR_SCRIPT_URL}?action=getHistory&t=${Date.now()}`, {
-            method: 'GET',
-            redirect: 'follow'
-        });
+  try {
+    const res = await fetch(`${YOUR_SCRIPT_URL}?action=getHistory&t=${Date.now()}`, {
+      method: 'GET',
+      cache: 'no-store',
+      redirect: 'follow'
+    });
         
         if (!res.ok) throw new Error(`HTTP Error: ${res.status}`);
         rawHistoryData = await res.json();

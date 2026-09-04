@@ -1448,7 +1448,7 @@ if (isHidden) {
 
     // 啟動初始化
 window.onload = async () => {
-    document.addEventListener("touchstart", function() {}, true);// 強制啟動手機版的點擊回饋
+    document.addEventListener("touchstart", function() {}, true); // 強制啟動手機版的點擊回饋
 
     // 1. 初始化 DOM 基礎 UI
     isHidden = true;
@@ -1459,48 +1459,45 @@ window.onload = async () => {
     }
     initCategorySelect();
 
-    // 🟢 2. ⚡ 秒開體驗：優先載入本地資料並立即繪製畫面
+    // 🟢 2. ⚡ 秒開體驗：優先讀取本地快取繪製畫面 (0.1 秒極速開頁)
+    const localDataStr = localStorage.getItem('percento_dark_data');
+    if (localDataStr) {
+        try { assets = JSON.parse(localDataStr); } catch(e){}
+    }
     const localHidden = localStorage.getItem('percento_hidden_cats');
     if (localHidden) hiddenCategories = JSON.parse(localHidden);
 
     const localSelectedCats = localStorage.getItem('percento_selected_cats');
     if (localSelectedCats) selectedHistoryCats = JSON.parse(localSelectedCats);
 
-    const savedPrevious = localStorage.getItem('percento_previous_cats');
-    if (savedPrevious) {
-        try { previousHistoryCats = JSON.parse(savedPrevious); } catch(e){}
-    }
+    refresh(); // 立即渲染本地畫面
 
-    // 立即渲染本地 UI，不需等待網路請求
-    refresh();
+    // 🟢 3. 🔒 鎖定所有送出/儲存按鈕（防止背景同步完成前寫入舊快取）
+    const actionBtns = document.querySelectorAll('button[type="submit"], #saveBtn, .save-btn, form button');
+    actionBtns.forEach(b => { b.disabled = true; b.style.opacity = '0.5'; });
 
-    // 🟢 3. 背景非同步同步 (並行發送請求)
-    document.getElementById('status').innerText = "☁️ 正在背景同步...";
+    const statusEl = document.getElementById('status');
+    if (statusEl) statusEl.innerText = "☁️ 正在背景同步...";
 
     try {
-        // 使用 Promise.allSettled 同時請求 GAS 與匯率 API
+        // 🟢 4. 背景讀取雲端資料
         const [cloudRes, rateRes] = await Promise.allSettled([
-            fetch(`${YOUR_SCRIPT_URL}?action=getAllData`),
+            fetch(`${YOUR_SCRIPT_URL}?action=getAllData&t=${Date.now()}`, { cache: 'no-store' }),
             fetch('https://open.er-api.com/v6/latest/USD')
         ]);
 
-        // 1. 先處理匯率資料
         if (rateRes.status === 'fulfilled') {
             const d = await rateRes.value.json();
             if (d && d.rates && d.rates.TWD) usdToTwd = d.rates.TWD;
         }
 
-        // 2. 處理雲端資產資料（加入時間戳記防禦，避免舊電腦蓋掉新手機）
         if (cloudRes.status === 'fulfilled') {
             const cloudData = await cloudRes.value.json();
             if (cloudData && cloudData.assets && cloudData.assets.length > 0) {
-                // 🟢 移除時間戳記攔截，直接強制以雲端最新資料覆蓋本地快取
+                // 雲端資料強行覆蓋快取
                 assets = cloudData.assets;
                 localStorage.setItem('percento_dark_data', JSON.stringify(assets));
 
-                if (cloudData.lastUpdated) {
-                    localStorage.setItem('lastUpdated', cloudData.lastUpdated);
-                }
                 if (cloudData.hiddenCats) {
                     hiddenCategories = cloudData.hiddenCats;
                     localStorage.setItem('percento_hidden_cats', JSON.stringify(hiddenCategories));
@@ -1510,15 +1507,20 @@ window.onload = async () => {
                     localStorage.setItem('percento_selected_cats', JSON.stringify(selectedHistoryCats));
                 }
             }
+            if (statusEl) statusEl.innerText = "✅ 同步完成";
+        } else {
+            if (statusEl) statusEl.innerText = "⚠️ 使用離線資料";
         }
-
-        document.getElementById('status').innerText = "✅ 同步完成";
-        refresh();
-
-    } catch(e) {
-        console.log("背景同步發生異常:", e);
-        document.getElementById('status').innerText = "⚠️ 使用離線資料";
+    } catch (e) {
+        console.error("背景同步失敗:", e);
+        if (statusEl) statusEl.innerText = "⚠️ 使用離線資料";
+    } finally {
+        // 🟢 5. 🔓 背景同步結束（無論成功失敗），解除按鈕鎖定
+        actionBtns.forEach(b => { b.disabled = false; b.style.opacity = '1'; });
     }
+
+    // 🟢 6. 刷新為最新雲端數據
+    refresh();
 };
 
 // 在 handleNewItem 函數末端加入
